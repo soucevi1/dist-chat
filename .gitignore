@@ -1,2 +1,4 @@
 .idea
 __venv__
+poznamky.txt
+*pycache*
