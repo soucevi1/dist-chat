@@ -1,4 +1,5 @@
 from enum import Enum
+import json
 
 
 class MessageType(Enum):
@@ -17,6 +18,7 @@ class MessageType(Enum):
     * new_message: message created from the user input, to be sent to the leader
     * prev_info_message: previous node is dead, inform its previous node about address and port to connect to
     * prev_connect_message: message sent by previous node previous node after previous node's death
+    * i_am_prev_message: message sent by new node to its next node
     """
     user_message = 1
     election_message = 2
@@ -28,6 +30,7 @@ class MessageType(Enum):
     new_message = 8
     prev_connect_message = 9
     prev_inform_message = 10
+    i_am_prev_message = 11
 
 
 class CMessage:
@@ -64,11 +67,21 @@ class CMessage:
         Convert message to JSON.
         :return: Message in the JSON format
         """
-        ...
+        d = {'s_addr': self.sender_address,
+             's_port': self.sender_port,
+             's_name': self.sender_name,
+             'm_type': self.message_type.value,
+             'data': self.message_data}
+        j = json.dumps(d)
+        return json.loads(j)
 
     def JSON_to_message(self, received_json):
         """
         Convert JSON to the CMessage class.
         :param received_json: JSON by the server
         """
-        ...
+        self.sender_address = received_json['s_addr']
+        self.sender_port = received_json['s_port']
+        self.sender_name = received_json['s_name']
+        self.message_type = received_json['m_type']
+        self.message_data = received_json['data']
