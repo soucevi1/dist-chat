@@ -2,3 +2,5 @@
 __venv__
 poznamky.txt
 *pycache*
+poznamky2.txt poznamky.txt
+poznamky*

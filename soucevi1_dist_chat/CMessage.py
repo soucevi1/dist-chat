@@ -15,6 +15,8 @@ class MessageType(Enum):
     * logout_message: message sent if a non-leader node want to log out
     * logout_election_message: message sent if a leader wants to log out, initiates election
     * new_message: message created from the user input, to be sent to the leader
+    * prev_info_message: previous node is dead, inform its previous node about address and port to connect to
+    * prev_connect_message: message sent by previous node previous node after previous node's death
     """
     user_message = 1
     election_message = 2
@@ -24,6 +26,8 @@ class MessageType(Enum):
     logout_message = 6
     logout_election_message = 7
     new_message = 8
+    prev_connect_message = 9
+    prev_inform_message = 10
 
 
 class CMessage:
