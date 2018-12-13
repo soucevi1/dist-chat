@@ -173,10 +173,18 @@ class CNode:
             print('/// Tasks cancelled')
 
     async def wait_for_connection(self):
+        """
+        The leader is alone and must wait for the first connection
+        is order to continue creating the ring.
+        """
         while True:
+
+            # Try if already connected
             if self.next_node_reader is not None:
                 print('/// First connection - waking up...')
                 break
+
+            # Not connected -- pass the execution for a while
             await asyncio.sleep(0.1)
 
     async def join_the_ring(self):
@@ -187,9 +195,9 @@ class CNode:
         """
 
         print('/// Joining the ring')
-        # Send login message to given node
-        data = {}
-        message = self.craft_message(MessageType.login_message, data)
+
+        # Send login message to given node.
+        message = self.craft_message(MessageType.login_message, {})
         print('/// Sending login message')
         try:
             await self.send_message_to_ring(message)
@@ -197,16 +205,19 @@ class CNode:
             print('Critical ring error')
             sys.exit(1)
 
-        # Wait for the answer, close the connection to the node
+        # Wait for the answer, close the current
+        # connection to the node.
         print('/// Waiting for the answer to login message')
         answer_raw = await self.next_node_reader.read()
         answer = answer_raw.decode()
-        m_amswer = CMessage(message_str=answer)
-        answer_data = m_amswer.message_data
+        m_answer = CMessage(message_str=answer)
+        answer_data = m_answer.message_data
 
+        # Save the old writer to close it in the end.
         old_w = self.next_node_writer
 
-        # The answer contains IP and port of the new next node.
+        # The answer contains IP and port
+        # of the new next node and the leader.
         self.next_node_address = answer_data['next_IP']
         self.next_node_port = answer_data['next_port']
         self.leader_address = answer_data['leader_IP']
@@ -214,13 +225,18 @@ class CNode:
 
         print(f'/// Next node is: {self.next_node_address}:{self.next_node_port}')
 
+        # Open new connection to the node whose
+        # address and port were in the answer.
         print('/// Opening the new connection')
         self.next_node_reader, self.next_node_writer = await asyncio.open_connection(self.next_node_address,
                                                                                      self.next_node_port)
+
+        # Close the old connection now.
         old_w.close()
         await old_w.wait_closed()
         print('/// Closed old connection')
 
+        # Inform next node to change its prev
         m = self.craft_message(MessageType.i_am_prev_message, {})
         print('/// Informing new next node')
         await self.send_message_to_ring(m)
@@ -234,25 +250,44 @@ class CNode:
         ...
 
     async def server_init(self):
+        """
+        Initialize the server coroutine, make it run forever.
+        """
         print('/// Initializing the server')
         server = await asyncio.start_server(self.run_server, self.address, self.port)
         async with server:
             await server.serve_forever()
 
     async def run_server(self, reader, writer):
+        """
+        Callback made whenever a connection with the server is made.
+        Try to read some data.
+        If the writer is closing, return (callback ends, there is nothing else to do).
+        If the received data is empty, and this node is exiting, return.
+        If the data is empty and the prev reader is not the current reader,
+        return (the previous node must have changed).
+        Otherwise if the data is empty, close the connection, set the prev streams to none
+        and inform the dead previous' previous node where to connect.
+        If the data is OK, create a CMessage instance out of them and handle the message.
+        :param reader: AsyncIO StreamReader, high level socket for receiving data from the connection.
+        :param writer: ASyncIO StreamWriter, high level socket for sending data through the connection.
+        """
         while True:
 
+            # Read the data from the connection.
             data = await reader.read(10000)
 
+            # If the connection is closed/ing,
+            # end the callback.
             if writer.is_closing():
                 await asyncio.sleep(0.1)
-                continue
+                return
 
-            # Previous node died, send message to its previous node so that it can connect
+            # Previous node died, send message to its
+            # previous node so that it can connect.
             if data == b'':
-                if writer != self.next_node_writer:
+                if writer != self.prev_node_writer:
                     await asyncio.sleep(0.1)
-                    #continue
                     return
                 if self.exiting:
                     return
@@ -273,6 +308,10 @@ class CNode:
             await self.handle_message(message, reader, writer)
 
     async def read_socket(self):
+        """
+        Coroutine keeipng the ocnnection to the next node alive.
+        No data is expected except for when the next node dies.
+        """
 
         # Flag is there to give the writer another change if the connection seems
         # to be lost. During the various reconnections while loggin in a new node
@@ -287,7 +326,7 @@ class CNode:
                 self.next_node_writer = None
                 self.next_node_reader = None
                 while self.next_node_writer is None or self.next_node_reader is None:
-                    await asyncio.sleep(1)
+                    await asyncio.sleep(0.1)
 
             # Wait for some data to come. The only data to come through
             # this stream should be b'' in case of the next node's death.
@@ -302,7 +341,7 @@ class CNode:
                     return
                 # If there is a second chance, wait and repeat the reading.
                 if flag:
-                    await asyncio.sleep(1)
+                    await asyncio.sleep(0.1)
                     flag = False
                     continue
                 self.next_node_writer.close()
@@ -313,6 +352,12 @@ class CNode:
             flag = True
 
     async def read_input(self, loop):
+        """
+        Coroutine reading the user's keyboard input and
+        transforming it into the CMessage.
+        If '//exit' is read here, the program exits.
+        :param loop: Current event loop.
+        """
         while True:
             message = await loop.run_in_executor(None, input, '>>')
 
@@ -327,21 +372,38 @@ class CNode:
             await self.send_user_message(umsg)
 
     def craft_message(self, m_type, data):
+        """
+        Create CMessage instance with information about
+        the sender (current node), given type and body
+        :param m_type: Type of the message
+        :type m_type: MessageType
+        :param data: Main body of the message.
+        :return: CMessage instance
+        """
         message = CMessage(sender_address=self.address, sender_port=self.port, sender_name=self.name,
                            message_type=m_type, message_data=data)
         return message
 
-    # TODO: send message only to server
+    # TODO: send user message only to server
     async def send_user_message(self, message):
+        """
+        Send user input as a message to the leader node.
+        :param message: CMessage made from the user input.
+        """
         print(f'> You: {message.message_data}')
         await self.send_message_to_ring(message)
 
+    # TODO: this message must contain 'ring' flag - needs to be sent all around
     async def send_prev_inform_message(self):
         data = {'new_next_IP': self.address, 'new_next_port': self.port}
         message = self.craft_message(MessageType.prev_inform_message, data)
         await self.send_message_to_ring(message)
 
     async def send_message_to_ring(self, message):
+        """
+        Send given message to the next node in the ring.
+        :param message: CMessage to be sent
+        """
         m = message.convert_to_string()
         try:
             self.next_node_writer.write(m.encode())
