@@ -39,8 +39,7 @@ class CMessage:
     during chatting or inside mechanisms of the program.
     """
 
-    def __init__(self, sender_address, sender_port, sender_name,
-                 message_type, message_data, message_json=None):
+    def __init__(self, **kwargs):
         """
         This concstructor serves as two constructors in fact.
         First is a constructor creating the instance in a common way
@@ -52,17 +51,20 @@ class CMessage:
         :param message_type: Type of the message
         :param message_data: Data carried by the message, the main body
         :param message_json: JSON received by the server
+        :param message_str: same as JSON, in string format
         """
-        if message_json is not None:
-            self.JSON_to_message(message_json)
-        else:
-            self.sender_address = sender_address
-            self.sender_port = sender_port
-            self.sender_name = sender_name
-            self.message_type = message_type
-            self.message_data = message_data
+        if 'message_json' in kwargs:
+            self.from_json(kwargs['message_json'])
+        elif 'sender_address' in kwargs:
+            self.sender_address = kwargs['sender_address']
+            self.sender_port = kwargs['sender_port']
+            self.sender_name = kwargs['sender_name']
+            self.message_type = kwargs['message_type']
+            self.message_data = kwargs['message_data']
+        elif 'message_str' in kwargs:
+            self.from_string(kwargs['message_str'])
 
-    def convert_to_JSON(self):
+    def convert_to_json(self):
         """
         Convert message to JSON.
         :return: Message in the JSON format
@@ -75,7 +77,20 @@ class CMessage:
         j = json.dumps(d)
         return json.loads(j)
 
-    def JSON_to_message(self, received_json):
+    def convert_to_string(self):
+        """
+        Convert message to string
+        :return: Message JSON in string format
+        """
+        d = {'s_addr': self.sender_address,
+             's_port': self.sender_port,
+             's_name': self.sender_name,
+             'm_type': self.message_type.value,
+             'data': self.message_data}
+        j = json.dumps(d)
+        return j
+
+    def from_json(self, received_json):
         """
         Convert JSON to the CMessage class.
         :param received_json: JSON by the server
@@ -85,3 +100,12 @@ class CMessage:
         self.sender_name = received_json['s_name']
         self.message_type = received_json['m_type']
         self.message_data = received_json['data']
+
+    def from_string(self, str):
+        """
+        Convert string to CMessage.
+        :param str: JSON in string format
+        :return:
+        """
+        j = json.loads(str)
+        self.from_json(j)
