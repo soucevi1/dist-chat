@@ -1,9 +1,6 @@
 from soucevi1_dist_chat.CMessage import CMessage, MessageType
 import asyncio
-import socket
-import json
 import sys
-from pprint import pprint
 
 
 class CNode:
@@ -23,21 +20,16 @@ class CNode:
         self.next_node_writer = None
         self.prev_node_reader = None
         self.prev_node_writer = None
+        self.leader_reader = None
+        self.leader_writer = None
         self.exiting = False
+        self.connections = []
         if is_leader:
             self.leader_address = self.address
             self.leader_port = self.port
         else:
             self.leader_address = None
             self.leader_port = None
-
-    def logout(self):
-        """
-        Logout from the chatroom. If this node is not the leader,
-        let the leader know that this node is leaving. If this node
-        is the leader, let other nodes know this node is leaving and start the election.
-        """
-        ...
 
     async def handle_message(self, message, reader, writer):
         """
@@ -68,23 +60,112 @@ class CNode:
             print(f'/// Received prev inform message from {sender}')
             await self.handle_prev_inform_message(message)
 
-        # TODO: only leader can accept user nessages
+        # Another user writes a message
         elif m_type == MessageType.user_message:
 
-            await self.handle_user_message(message)
+            await self.handle_user_message(message, reader)
+
+        elif m_type == MessageType.hello_leader_message:
+
+            await self.handle_hello_leader_message(message, reader, writer)
 
         else:
 
             print(f'/// Unknown message type: {m_type}')
 
-    async def handle_user_message(self, message):
+    async def handle_hello_leader_message(self, message, reader, writer):
         """
-        The leader received the user message.
-        It must distribute the message to all the
+        New node registers to the message broadcast.
+        :param message:
+        :param reader:
+        :param writer:
+        """
+        if self.find_in_connections(reader):
+            # Connection already exists
+            print('/// Hello leader received from known node!')
+            return
+        print(f'/// Adding {message.sender_address}:{message.sender_port} to the broadcast list')
+        await self.add_connection_record(message, reader)
+        print(f'/// Number of connections: {len(self.connections)}')
+        await self.send_hello_from_leader(message)
+
+    async def send_hello_from_leader(self, message):
+        """
+        The leader node distributes a message telling everyone in
+        the ring (except the new node) that a new node joined.
+        :param message: Original hello message
+        """
+        m = self.craft_message(MessageType.user_message, f'{message.sender_name} joined the ring!')
+        await self.distribute_message(m, exc=(message.sender_address, message.sender_port))
+
+    async def handle_user_message(self, message, reader):
+        """
+        The node received the user message.
+        If it it not a leader node, it just displays the message
+        to the console.
+        If it is a leader, it must distribute the message to all the
         nodes in the ring.
         :param message: User message to handle
+        :param reader: Stream reader
+        :param writer: Stream writer
         """
-        print(f'> {message.sender_port}: {message.message_data}')
+        print(f'> {message.sender_name}({message.sender_port}): {message.message_data}')
+        if self.is_leader:
+            if not self.find_in_connections(reader):
+                print('/// Received user message from unknown node')
+                await self.add_connection_record(message, reader)
+            await self.distribute_message(message)
+
+    async def add_connection_record(self, message, reader):
+        """
+        Add new connection to the broadcasting list.
+        :param message: Received user message
+        :param reader: Stream reader
+        :param writer: Stream witer
+        """
+        conn = {
+            'addr': message.sender_address,
+            'port': message.sender_port,
+            'reader': reader,
+        }
+        try:
+            _, conn['writer'] = await asyncio.open_connection(message.sender_address, message.sender_port)
+        except ConnectionError:
+            print('Cannot open backwards connection to client')
+            return
+        self.connections.append(conn)
+
+    def find_in_connections(self, reader):
+        """
+        Find if there is a record of the connection
+        represented by the given stream writer.
+        :param reader: Stream writer
+        :return: True if writer is in connections, False otherwise.
+        """
+        for c in self.connections:
+            if c['reader'] == reader:
+                return True
+        return False
+
+    async def distribute_message(self, message, exc=None):
+        """
+        Distribute message to all known nodes.
+        :param message: User message
+        :param exc: Exception in distribution: IP and port of a node that will not receive the message
+        """
+        for conn in self.connections:
+            # Do not send the message back to the sender
+            if conn['addr'] == message.sender_address and conn['port'] == message.sender_port:
+                continue
+            if exc and conn['addr'] == exc[0] and conn['port'] == exc[1]:
+                continue
+            try:
+                print(f'/// Distribution to: {conn["addr"]}:{conn["port"]}')
+                conn['writer'].write(message.convert_to_string().encode())
+                await conn['writer'].drain()
+            except ConnectionError:
+                print(f'/// {conn["addr"]}:{conn["port"]} not reachable to broadcast')
+                self.remove_from_connections(conn['reader'], conn['writer'])
 
     async def handle_prev_inform_message(self, message):
         """
@@ -309,8 +390,12 @@ class CNode:
         # Open new connection to the node whose
         # address and port were in the answer.
         print('/// Opening the new connection')
-        self.next_node_reader, self.next_node_writer = await asyncio.open_connection(self.next_node_address,
-                                                                                     self.next_node_port)
+        try:
+            self.next_node_reader, self.next_node_writer = await asyncio.open_connection(self.next_node_address,
+                                                                                         self.next_node_port)
+        except ConnectionError:
+            print('/// Connection to the next node cannot be opened')
+            sys.exit(1)
 
         # Close the old connection now.
         old_w.close()
@@ -321,6 +406,21 @@ class CNode:
         m = self.craft_message(MessageType.i_am_prev_message, {})
         print('/// Informing new next node')
         await self.send_message_to_ring(m)
+
+        # Connect to the leader and send him a hello
+        print(f'/// Connecting to leader: {self.leader_address}:{self.leader_port}')
+        try:
+            self.leader_reader, self.leader_writer = await asyncio.open_connection(self.leader_address,
+                                                                                   self.leader_port)
+        except ConnectionError:
+            print('/// Connection to the leader cannot be opened')
+            sys.exit(1)
+        except asyncio.CancelledError:
+            print('CancelledError')
+            sys.exit(1)
+
+        m = self.craft_message(MessageType.hello_leader_message, {})
+        await self.send_message_to_leader(m)
 
     def set_logical_clock(self, other_clock):
         """
@@ -366,10 +466,17 @@ class CNode:
             # Previous node died, send message to its
             # previous node so that it can connect.
             if data == b'':
+
                 if writer != self.prev_node_writer:
+
+                    # Other than prev died, remove it from the connection list
+                    if self.is_leader:
+                        self.remove_from_connections(reader, writer)
                     return
+
                 if self.exiting:
                     return
+
                 writer.close()
                 await writer.wait_closed()
                 print('/// Lost connection to previous node')
@@ -387,6 +494,18 @@ class CNode:
             message = CMessage(message_str=data.decode())
 
             await self.handle_message(message, reader, writer)
+
+    def remove_from_connections(self, reader, writer):
+        """
+        Remove the connection represented by streams in argument
+        form the leader connections list.
+        :param reader: Stream reader of the removed connection
+        :param writer: Stream writer of the removed connection
+        """
+        for c in self.connections:
+            if c['reader'] == reader and c['writer'] == writer:
+                self.connections.remove(c)
+                return
 
     async def read_socket(self):
         """
@@ -422,7 +541,7 @@ class CNode:
 
                 data = await self.next_node_reader.read()
 
-            except (asyncio.CancelledError, ConnectionError):
+            except (asyncio.CancelledError, ConnectionError) as e:
 
                 print('/// Waiting for connection to the next node...')
                 self.next_node_writer = None
@@ -492,14 +611,17 @@ class CNode:
                            message_type=m_type, message_data=data)
         return message
 
-    # TODO: send user message only to server
     async def send_user_message(self, message):
         """
         Send user input as a message to the leader node.
         :param message: CMessage made from the user input.
         """
-        print(f'> You: {message.message_data}')
-        await self.send_message_to_ring(message)
+        if not self.is_leader:
+            print('/// Sending mesage to leader')
+            await self.send_message_to_leader(message)
+        else:
+            print('/// No need to send user message, distributing')
+            await self.distribute_message(message)
 
     async def send_prev_inform_message(self):
         """
@@ -520,5 +642,17 @@ class CNode:
             await self.next_node_writer.drain()
         except ConnectionRefusedError:
             print(f'Connection refused while sending: {m}')
+
+    async def send_message_to_leader(self, message):
+        """
+        Send given message directly to the leader node.
+        :param message: CMessag to be sent
+        """
+        m = message.convert_to_string()
+        try:
+            self.leader_writer.write(m.encode())
+            await self.leader_writer.drain()
+        except ConnectionError:
+            print(f'Error - Connection to the leader')
 
 
