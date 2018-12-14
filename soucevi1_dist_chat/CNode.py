@@ -48,81 +48,156 @@ class CNode:
         :type message: CMessage
         """
         m_type = MessageType(message.message_type)
+        sender = message.sender_address, message.sender_port
 
         # New node wants to log in
         if m_type == MessageType.login_message:
-            print(f'/// Received login message from {message.sender_address}:{message.sender_port}')
 
-            # If the node is the leader without other conections
-            if self.next_node_port is None or self.next_node_address is None:
-                answer = {'next_IP': self.address, 'next_port': self.port,
-                          'leader_IP': self.leader_address, 'leader_port': self.leader_port}
-
-            # If the ring already exists
-            else:
-                answer = {'next_IP': self.next_node_address, 'next_port': self.next_node_port,
-                          'leader_IP': self.leader_address, 'leader_port': self.leader_port}
-            a = self.craft_message(MessageType.login_message, answer)
-            s_answer = a.convert_to_string()
-            print('/// Sending info to the new node')
-            try:
-                writer.write(s_answer.encode())
-                await writer.drain()
-            except ConnectionRefusedError:
-                print('/// Critical error while answering to login message')
-                sys.exit(1)
-            self.next_node_port = message.sender_port
-            self.next_node_address = message.sender_address
-            print('/// Opening connection to new next')
-            try:
-                self.next_node_reader, self.next_node_writer = await asyncio.open_connection(self.next_node_address,
-                                                                                             self.next_node_port)
-            except ConnectionRefusedError:
-                print('/// Critical error while connecting to the new next node')
-                sys.exit(1)
-            print(f'/// New connection opened, next node is: {self.next_node_address}:{self.next_node_port}')
-
-            m = self.craft_message(MessageType.i_am_prev_message, {})
-            print('/// Informing next about being its prev')
-            await self.send_message_to_ring(m)
-
-            print('/// Closing the old connection')
-            writer.close()
-            await writer.wait_closed()
+            print(f'/// Received login message from {sender}')
+            await self.handle_login_message(message, writer)
 
         # New node informing about itself
         elif m_type == MessageType.i_am_prev_message:
-            print(f'/// Received i am prev message from {message.sender_address}:{message.sender_port}')
-            info = message.sender_address, message.sender_port
-            print(f'/// New prev node: {info}')
-            if self.prev_node_writer is not None:
-                self.prev_node_writer.close()
-                await self.prev_node_writer.wait_closed()
-            self.prev_node_reader = reader
-            self.prev_node_writer = writer
 
-        # Previous node is dead and this message comes from its previous node
-        elif m_type == MessageType.prev_connect_message:
-            print(f'/// Received prev connect message from {message.sender_address}:{message.sender_port}')
-            info = message.sender_address, message.sender_port
-            print(f'/// New prev node: {info}')
-            self.prev_node_writer = writer
-            self.prev_node_reader = reader
+            print(f'/// Received i am prev message from {sender}')
+            await self.handle_i_am_prev_message(reader, writer)
 
         # Prev node died, inform its prev where to connect
         elif m_type == MessageType.prev_inform_message:
-            print(f'/// Received prev inform message from {message.sender_address}:{message.sender_port}')
-            info = message.sender_address, message.sender_port
-            print(f'/// Announced new prev: {info}')
-            self.prev_node_writer = writer
-            self.prev_node_reader = reader
+
+            print(f'/// Received prev inform message from {sender}')
+            await self.handle_prev_inform_message(message)
 
         # TODO: only leader can accept user nessages
         elif m_type == MessageType.user_message:
-            print(f'> {message.sender_port}: {message.message_data}')
+
+            await self.handle_user_message(message)
 
         else:
+
             print(f'/// Unknown message type: {m_type}')
+
+    async def handle_user_message(self, message):
+        """
+        The leader received the user message.
+        It must distribute the message to all the
+        nodes in the ring.
+        :param message: User message to handle
+        """
+        print(f'> {message.sender_port}: {message.message_data}')
+
+    async def handle_prev_inform_message(self, message):
+        """
+        A node died. Its next node detects it and sends
+        a message to the ring. If this node's next is dead,
+        its new next node is the sender of the message.
+        :param message: Message to handle
+        """
+        # Pass the message on if this node's next is alive.
+        if self.next_node_writer is not None:
+            print('/// Passed prev inform message on...')
+            await self.send_message_to_ring(message)
+            return
+
+        # Update new next node and address.
+        self.next_node_reader, self.next_node_writer = await asyncio.open_connection(message.sender_address,
+                                                                                     message.sender_port)
+        self.next_node_address = message.sender_address
+        self.next_node_port = message.sender_port
+
+        print(f'/// Opened new connection to {message.sender_address}:{message.sender_port}')
+
+        # Inform the new next about the connection,
+        # so that it can update the prev streams.
+        m = self.craft_message(MessageType.i_am_prev_message, {})
+        await self.send_message_to_ring(m)
+        print('/// Ring renewed')
+
+    async def handle_i_am_prev_message(self, reader, writer):
+        """
+        The previous node of the current node has changed
+        and it's informing this node about being its new prev,
+        so it can update the instance streams.
+        :param reader: Stream reader of the new previous node
+        :param writer: Stream writer of the new previous node
+        """
+        # There is still an active connection to the old previous node
+        if self.prev_node_writer is not None and not self.prev_node_writer.is_closing():
+
+            self.prev_node_writer.close()
+            print('/// Closing the old prev')
+            await self.prev_node_writer.wait_closed()
+
+        # Update the instance streams
+        self.prev_node_reader = reader
+        self.prev_node_writer = writer
+
+    async def handle_login_message(self, message, writer):
+        """
+        A new node wants to log in. Make the new node this
+        node's next and tell it where to connect (its next
+        is this node's old next).
+        :param message: Login message to handle
+        :param writer: Writer stream of the new node
+        """
+
+        # If the node is the leader without other conections
+        if self.next_node_port is None or self.next_node_address is None:
+
+            answer = {
+                      'next_IP': self.address,
+                      'next_port': self.port,
+                      'leader_IP': self.leader_address,
+                      'leader_port': self.leader_port
+                      }
+
+        # If the ring already exists
+        else:
+
+            answer = {
+                      'next_IP': self.next_node_address,
+                      'next_port': self.next_node_port,
+                      'leader_IP': self.leader_address,
+                      'leader_port': self.leader_port
+                      }
+
+        a = self.craft_message(MessageType.login_message, answer)
+        s_answer = a.convert_to_string()
+
+        try:
+
+            print('/// Sending info to the new node')
+            writer.write(s_answer.encode())
+            await writer.drain()
+
+        except ConnectionRefusedError:
+
+            print('/// Critical error while answering to login message')
+            sys.exit(1)
+
+        self.next_node_port = message.sender_port
+        self.next_node_address = message.sender_address
+
+        try:
+
+            print('/// Opening connection to new next')
+            self.next_node_reader, self.next_node_writer = await asyncio.open_connection(self.next_node_address,
+                                                                                         self.next_node_port)
+
+        except ConnectionRefusedError:
+
+            print('/// Critical error while connecting to the new next node')
+            sys.exit(1)
+
+        print(f'/// New connection opened, next node is: {self.next_node_address}:{self.next_node_port}')
+
+        print('/// Informing next about being its prev')
+        m = self.craft_message(MessageType.i_am_prev_message, {})
+        await self.send_message_to_ring(m)
+
+        print('/// Closing the old connection')
+        writer.close()
+        await writer.wait_closed()
 
     async def run(self):
         """
@@ -138,16 +213,21 @@ class CNode:
 
         # If node is the leader, it just needs to wait for a connection
         if self.is_leader:
+
             await self.wait_for_connection()
 
         # If node is not the leader, it can open the connection
         else:
+
             try:
+
                 self.next_node_reader, self.next_node_writer = await asyncio.open_connection(self.next_node_address,
                                                                                              self.next_node_port)
             except ConnectionRefusedError:
+
                 print('/// Invalid IP or port passed in argument')
                 sys.exit(1)
+
             print(f'/// Initial connection established with {self.next_node_address}:{self.next_node_port}')
             await self.join_the_ring()
             print('/// Ring joined')
@@ -156,19 +236,20 @@ class CNode:
         socket_coro = asyncio.create_task(self.read_socket())
         print('/// Initialize input reading')
         input_coro = asyncio.create_task(self.read_input(loop))
+
         try:
-            await socket_coro
+
             await input_coro
-            if socket_coro.cancelled() or socket_coro.done():
-                input_coro.cancel()
-                server_coro.cancel()
-            elif input_coro.cancelled() or input_coro.done():
+
+            # Wait for the input_coro to end (= user wants to exit)
+            # and cancel all the remaining running tasks.
+            if input_coro.cancelled() or input_coro.done():
                 socket_coro.cancel()
                 server_coro.cancel()
-            elif server_coro.cancelled() or server_coro.done():
-                input_coro.cancel()
-                socket_coro.cancel()
+
+            await socket_coro
             await server_coro
+
         except asyncio.CancelledError:
             print('/// Tasks cancelled')
 
@@ -280,14 +361,12 @@ class CNode:
             # If the connection is closed/ing,
             # end the callback.
             if writer.is_closing():
-                await asyncio.sleep(0.1)
                 return
 
             # Previous node died, send message to its
             # previous node so that it can connect.
             if data == b'':
                 if writer != self.prev_node_writer:
-                    await asyncio.sleep(0.1)
                     return
                 if self.exiting:
                     return
@@ -296,25 +375,27 @@ class CNode:
                 print('/// Lost connection to previous node')
                 self.prev_node_reader = None
                 self.prev_node_writer = None
-                await self.send_prev_inform_message()
-                continue
+                await asyncio.sleep(0.5)
+                if self.next_node_writer is not None:
+                    print('/// Informing the new prev')
+                    await self.send_prev_inform_message()
+                else:
+                    print('/// Left alone, became the leader')
+                    self.is_leader = True
+                return
 
             message = CMessage(message_str=data.decode())
-
-            if self.is_leader and self.prev_node_writer is None:
-                self.prev_node_writer = writer
-                self.prev_node_reader = reader
 
             await self.handle_message(message, reader, writer)
 
     async def read_socket(self):
         """
-        Coroutine keeipng the ocnnection to the next node alive.
+        Coroutine keeping the connection to the next node alive.
         No data is expected except for when the next node dies.
         """
 
         # Flag is there to give the writer another change if the connection seems
-        # to be lost. During the various reconnections while loggin in a new node
+        # to be lost. During the various reconnections while logging in a new node
         # it sometimes looked disconnected (probably a race condition).
         flag = True
 
@@ -322,32 +403,55 @@ class CNode:
 
             # Next node is dead, must wait for message telling where to connect
             if self.next_node_writer.is_closing():
+
                 print('/// Waiting for connection...')
                 self.next_node_writer = None
                 self.next_node_reader = None
+                self.next_node_address = None
+                self.next_node_port = None
+
                 while self.next_node_writer is None or self.next_node_reader is None:
                     await asyncio.sleep(0.1)
+
+                flag = True
+                continue
 
             # Wait for some data to come. The only data to come through
             # this stream should be b'' in case of the next node's death.
             try:
+
                 data = await self.next_node_reader.read()
-            except asyncio.CancelledError:
+
+            except (asyncio.CancelledError, ConnectionError):
+
+                print('/// Waiting for connection to the next node...')
+                self.next_node_writer = None
+                self.next_node_reader = None
+                self.next_node_address = None
+                self.next_node_port = None
+
+                while self.next_node_writer is None or self.next_node_reader is None:
+                    await asyncio.sleep(0.1)
+
+                flag = True
                 continue
 
             # Next node just died, close the connection
             if data == b'':
+
                 if self.exiting:
                     return
+
                 # If there is a second chance, wait and repeat the reading.
                 if flag:
-                    await asyncio.sleep(0.1)
+
+                    await asyncio.sleep(0.3)
                     flag = False
                     continue
+
                 self.next_node_writer.close()
                 await self.next_node_writer.wait_closed()
                 print('/// Lost connection to next node')
-                continue
 
             flag = True
 
@@ -362,10 +466,14 @@ class CNode:
             message = await loop.run_in_executor(None, input, '>>')
 
             if message == '//exit':
+
                 print('/// Exiting...')
                 self.exiting = True
-                self.next_node_writer.close()
-                await self.next_node_writer.wait_closed()
+
+                if self.next_node_writer is not None:
+                    self.next_node_writer.close()
+                    await self.next_node_writer.wait_closed()
+
                 return
 
             umsg = self.craft_message(MessageType.user_message, message)
@@ -393,8 +501,10 @@ class CNode:
         print(f'> You: {message.message_data}')
         await self.send_message_to_ring(message)
 
-    # TODO: this message must contain 'ring' flag - needs to be sent all around
     async def send_prev_inform_message(self):
+        """
+        Inform the node whose next is dead to connect to this node.
+        """
         data = {'new_next_IP': self.address, 'new_next_port': self.port}
         message = self.craft_message(MessageType.prev_inform_message, data)
         await self.send_message_to_ring(message)

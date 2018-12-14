@@ -59,8 +59,11 @@ class CMessage:
             self.sender_address = kwargs['sender_address']
             self.sender_port = kwargs['sender_port']
             self.sender_name = kwargs['sender_name']
-            self.message_type = kwargs['message_type']
             self.message_data = kwargs['message_data']
+            if type(kwargs['message_type']) == int:
+                self.message_type = kwargs['message_type']
+            else:
+                self.message_type = kwargs['message_type'].value
         elif 'message_str' in kwargs:
             self.from_string(kwargs['message_str'])
 
@@ -72,8 +75,13 @@ class CMessage:
         d = {'s_addr': self.sender_address,
              's_port': self.sender_port,
              's_name': self.sender_name,
-             'm_type': self.message_type.value,
              'data': self.message_data}
+
+        if type(self.message_type) == int:
+            d['m_type'] = self.message_type
+        else:
+            d['m_type'] = self.message_type.value
+
         j = json.dumps(d)
         return json.loads(j)
 
@@ -85,8 +93,13 @@ class CMessage:
         d = {'s_addr': self.sender_address,
              's_port': self.sender_port,
              's_name': self.sender_name,
-             'm_type': self.message_type.value,
              'data': self.message_data}
+
+        if type(self.message_type) == int:
+            d['m_type'] = self.message_type
+        else:
+            d['m_type'] = self.message_type.value
+
         j = json.dumps(d)
         return j
 
@@ -98,8 +111,11 @@ class CMessage:
         self.sender_address = received_json['s_addr']
         self.sender_port = received_json['s_port']
         self.sender_name = received_json['s_name']
-        self.message_type = received_json['m_type']
         self.message_data = received_json['data']
+        if type(received_json['m_type']) == int:
+            self.message_type = received_json['m_type']
+        else:
+            self.message_type = received_json['m_type'].value
 
     def from_string(self, str):
         """
@@ -109,3 +125,12 @@ class CMessage:
         """
         j = json.loads(str)
         self.from_json(j)
+
+    def print(self):
+        """
+        Print the message together with its info.
+        """
+        print(f'Sender: {self.sender_address}:{self.sender_port}')
+        print(f'Name: {self.sender_name}')
+        print(f'Type: {self.message_type} ({MessageType(self.message_type)})')
+        print(f'Data: {self.message_data}')
