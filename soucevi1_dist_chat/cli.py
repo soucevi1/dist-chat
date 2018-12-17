@@ -2,6 +2,7 @@ import sys
 import click
 from soucevi1_dist_chat import CNode
 import asyncio
+import logging
 
 
 @click.command()
@@ -13,7 +14,9 @@ import asyncio
 @click.option('-np', '--neighbor-port',  help='Port of the neighbor')
 @click.option('-n', '--name', prompt='Enter your name please',
               help='Name that will be displayed to other participants')
-def main(leader, port, neighbor_address, neighbor_port, name):
+@click.option('-v', '--verbose', is_flag=True, default=False, help='Logging not only to'
+                                                                   'file, but also to stdout.')
+def main(leader, port, neighbor_address, neighbor_port, name, verbose):
     """
     Main function of the CLI program.
     Runs one instance of the node with given parameters.
@@ -23,6 +26,22 @@ def main(leader, port, neighbor_address, neighbor_port, name):
     :param neighbor_port: Port of the neighbor
     :param name: Name of the user
     """
+
+    # Initialize logging
+    root_logger = logging.getLogger()
+    file_handler = logging.FileHandler(f'chat_{port}.log')
+    root_logger.addHandler(file_handler)
+
+    # Verbose: log messages printed to stdout
+    if verbose:
+        console_handler = logging.StreamHandler(sys.stdout)
+        root_logger.addHandler(console_handler)
+
+    root_logger.setLevel(logging.INFO)
+
+    # In case the log file already exists, divide the chat sessions
+    logging.info('-------------------------------------')
+
     if not leader:
         if neighbor_address is None or neighbor_port is None:
             print('/// Neighbor address and port need to be supplied for non-leader nodes')

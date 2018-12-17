@@ -1,6 +1,8 @@
 from soucevi1_dist_chat.CMessage import CMessage, MessageType
 import asyncio
 import sys
+import logging
+from soucevi1_dist_chat.colors import Colors
 
 
 class CNode:
@@ -45,19 +47,19 @@ class CNode:
         # New node wants to log in
         if m_type == MessageType.login_message:
 
-            print(f'/// Received login message from {sender}')
+            logging.info(f'{self.logical_clock}: Received login message from {sender}')
             await self.handle_login_message(message, writer)
 
         # New node informing about itself
         elif m_type == MessageType.i_am_prev_message:
 
-            print(f'/// Received i am prev message from {sender}')
+            logging.info(f'{self.logical_clock}: Received i am prev message from {sender}')
             await self.handle_i_am_prev_message(reader, writer)
 
         # Prev node died, inform its prev where to connect
         elif m_type == MessageType.prev_inform_message:
 
-            print(f'/// Received prev inform message from {sender}')
+            logging.info(f'{self.logical_clock}: Received prev inform message from {sender}')
             await self.handle_prev_inform_message(message)
 
         # Another user writes a message
@@ -71,7 +73,7 @@ class CNode:
 
         else:
 
-            print(f'/// Unknown message type: {m_type}')
+            logging.error(f'{self.logical_clock} Received unknown message type: {m_type}')
 
         self.set_logical_clock(message.time)
 
@@ -84,11 +86,12 @@ class CNode:
         """
         if self.find_in_connections(reader):
             # Connection already exists
-            print('/// Hello leader received from known node!')
+            logging.error(f'{self.logical_clock}: Hello leader received from known node!')
             return
-        print(f'/// Adding {message.sender_address}:{message.sender_port} to the broadcast list')
+        logging.info(f'{self.logical_clock}: Adding {message.sender_address}:'
+                     f'{message.sender_port} to the broadcast list')
         await self.add_connection_record(message, reader)
-        print(f'/// Number of connections: {len(self.connections)}')
+        logging.info(f'{self.logical_clock}: Number of connections: {len(self.connections)}')
         await self.send_hello_from_leader(message)
 
     async def send_hello_from_leader(self, message):
@@ -111,10 +114,12 @@ class CNode:
         :param reader: Stream reader
         :param writer: Stream writer
         """
-        print(f'> {message.sender_name}({message.sender_port})[{message.time}]: {message.message_data}')
+        print(Colors.BOLD + Colors.CYAN + f'> {message.sender_name}' + Colors.RESET +
+              f'({message.sender_port})' + Colors.GREEN + f'[{message.time}]: '
+              + Colors.RESET + f'{message.message_data}')
         if self.is_leader:
             if not self.find_in_connections(reader):
-                print('/// Received user message from unknown node')
+                logging.error(f'{self.logical_clock}: Received user message from unknown node')
                 await self.add_connection_record(message, reader)
             await self.distribute_message(message)
 
@@ -132,7 +137,7 @@ class CNode:
         try:
             _, conn['writer'] = await asyncio.open_connection(message.sender_address, message.sender_port)
         except ConnectionError:
-            print('Cannot open backwards connection to client')
+            logging.error(f'{self.logical_clock}: Cannot open backwards connection to client')
             return
         self.connections.append(conn)
 
@@ -161,11 +166,11 @@ class CNode:
             if exc and conn['addr'] == exc[0] and conn['port'] == exc[1]:
                 continue
             try:
-                print(f'/// Distribution to: {conn["addr"]}:{conn["port"]}')
+                logging.info(f'{self.logical_clock}: Distribution to: {conn["addr"]}:{conn["port"]}')
                 conn['writer'].write(message.convert_to_string().encode())
                 await conn['writer'].drain()
             except ConnectionError:
-                print(f'/// {conn["addr"]}:{conn["port"]} not reachable to broadcast')
+                logging.error(f'{self.logical_clock}: {conn["addr"]}:{conn["port"]} not reachable to broadcast')
                 self.remove_from_connections(conn['reader'], conn['writer'])
 
     async def handle_prev_inform_message(self, message):
@@ -177,7 +182,7 @@ class CNode:
         """
         # Pass the message on if this node's next is alive.
         if self.next_node_writer is not None:
-            print('/// Passed prev inform message on...')
+            logging.info(f'{self.logical_clock}: Passed prev inform message on...')
             await self.send_message_to_ring(message)
             return
 
@@ -187,13 +192,13 @@ class CNode:
         self.next_node_address = message.sender_address
         self.next_node_port = message.sender_port
 
-        print(f'/// Opened new connection to {message.sender_address}:{message.sender_port}')
+        logging.info(f'{self.logical_clock}: Opened new connection to {message.sender_address}:{message.sender_port}')
 
         # Inform the new next about the connection,
         # so that it can update the prev streams.
         m = self.craft_message(MessageType.i_am_prev_message, {})
         await self.send_message_to_ring(m)
-        print('/// Ring renewed')
+        logging.info(f'{self.logical_clock}: Ring renewed')
 
     async def handle_i_am_prev_message(self, reader, writer):
         """
@@ -207,7 +212,7 @@ class CNode:
         if self.prev_node_writer is not None and not self.prev_node_writer.is_closing():
 
             self.prev_node_writer.close()
-            print('/// Closing the old prev')
+            logging.info(f'{self.logical_clock}: Closing the old prev')
             await self.prev_node_writer.wait_closed()
 
         # Update the instance streams
@@ -248,13 +253,13 @@ class CNode:
 
         try:
 
-            print('/// Sending info to the new node')
+            logging.info(f'{self.logical_clock}: Sending info to the new node')
             writer.write(s_answer.encode())
             await writer.drain()
 
         except ConnectionRefusedError:
 
-            print('/// Critical error while answering to login message')
+            logging.critical(f'{self.logical_clock}: Critical error while answering to login message')
             sys.exit(1)
 
         self.next_node_port = message.sender_port
@@ -262,22 +267,23 @@ class CNode:
 
         try:
 
-            print('/// Opening connection to new next')
+            logging.info(f'{self.logical_clock}: Opening connection to new next')
             self.next_node_reader, self.next_node_writer = await asyncio.open_connection(self.next_node_address,
                                                                                          self.next_node_port)
 
         except ConnectionRefusedError:
 
-            print('/// Critical error while connecting to the new next node')
+            logging.critical(f'{self.logical_clock}: Critical error while connecting to the new next node')
             sys.exit(1)
 
-        print(f'/// New connection opened, next node is: {self.next_node_address}:{self.next_node_port}')
+        logging.info(f'{self.logical_clock}: New connection opened, next node is:'
+                     f' {self.next_node_address}:{self.next_node_port}')
 
-        print('/// Informing next about being its prev')
+        logging.info(f'{self.logical_clock}: Informing next about being its prev')
         m = self.craft_message(MessageType.i_am_prev_message, {})
         await self.send_message_to_ring(m)
 
-        print('/// Closing the old connection')
+        logging.info(f'{self.logical_clock}: Closing the old connection')
         writer.close()
         await writer.wait_closed()
 
@@ -289,7 +295,7 @@ class CNode:
         and one is listening to incoming connections.
         """
 
-        print(f'/// Starting node on port: {self.port}')
+        logging.info(f'{self.logical_clock}: Starting node on port: {self.port}')
         loop = asyncio.get_event_loop()
         server_coro = asyncio.create_task(self.server_init())
 
@@ -307,17 +313,20 @@ class CNode:
                                                                                              self.next_node_port)
             except ConnectionRefusedError:
 
-                print('/// Invalid IP or port passed in argument')
+                logging.critical(f'{self.logical_clock}: Invalid IP or port passed in argument')
                 sys.exit(1)
 
-            print(f'/// Initial connection established with {self.next_node_address}:{self.next_node_port}')
+            logging.info(f'{self.logical_clock} Initial connection established with ' 
+                         f'{self.next_node_address}:{self.next_node_port}')
             await self.join_the_ring()
-            print('/// Ring joined')
+            logging.info(f'{self.logical_clock}: Ring joined')
 
-        print('/// Initialize socket reading')
+        logging.info(f'{self.logical_clock}: Initialize socket reading')
         socket_coro = asyncio.create_task(self.read_socket())
-        print('/// Initialize input reading')
+        logging.info(f'{self.logical_clock} Initialize input reading')
         input_coro = asyncio.create_task(self.read_input(loop))
+
+        print(Colors.GREEN + "/// Welcome to the dist-chat, you're free to write messages now. ///" + Colors.RESET)
 
         try:
 
@@ -333,7 +342,7 @@ class CNode:
             await server_coro
 
         except asyncio.CancelledError:
-            print('/// Tasks cancelled')
+            logging.info(f'{self.logical_clock}: All tasks cancelled')
 
     async def wait_for_connection(self):
         """
@@ -344,7 +353,7 @@ class CNode:
 
             # Try if already connected
             if self.next_node_reader is not None:
-                print('/// First connection - waking up...')
+                logging.info(f'{self.logical_clock}: First connection - waking up...')
                 break
 
             # Not connected -- pass the execution for a while
@@ -357,20 +366,20 @@ class CNode:
         with information about its next node, that is to become this node's next node.
         """
 
-        print('/// Joining the ring')
+        logging.info(f'{self.logical_clock}: Joining the ring')
 
         # Send login message to given node.
         message = self.craft_message(MessageType.login_message, {})
-        print('/// Sending login message')
+        logging.info(f'{self.logical_clock}: Sending login message')
         try:
             await self.send_message_to_ring(message)
         except ConnectionRefusedError:
-            print('Critical ring error')
+            logging.critical(f'{self.logical_clock}: Critical ring error')
             sys.exit(1)
 
         # Wait for the answer, close the current
         # connection to the node.
-        print('/// Waiting for the answer to login message')
+        logging.info(f'{self.logical_clock}: Waiting for the answer to login message')
         answer_raw = await self.next_node_reader.read()
         answer = answer_raw.decode()
         m_answer = CMessage(message_str=answer)
@@ -387,38 +396,38 @@ class CNode:
         self.leader_address = answer_data['leader_IP']
         self.leader_port = answer_data['leader_port']
 
-        print(f'/// Next node is: {self.next_node_address}:{self.next_node_port}')
+        logging.info(f'{self.logical_clock}: Next node is {self.next_node_address}:{self.next_node_port}')
 
         # Open new connection to the node whose
         # address and port were in the answer.
-        print('/// Opening the new connection')
+        logging.info(f'{self.logical_clock}: Opening the new connection')
         try:
             self.next_node_reader, self.next_node_writer = await asyncio.open_connection(self.next_node_address,
                                                                                          self.next_node_port)
         except ConnectionError:
-            print('/// Connection to the next node cannot be opened')
+            logging.error(f'{self.logical_clock}: Connection to the next node cannot be opened')
             sys.exit(1)
 
         # Close the old connection now.
         old_w.close()
         await old_w.wait_closed()
-        print('/// Closed old connection')
+        logging.info(f'{self.logical_clock}: Closed old connection')
 
         # Inform next node to change its prev
         m = self.craft_message(MessageType.i_am_prev_message, {})
-        print('/// Informing new next node')
+        logging.info(f'{self.logical_clock}: Informing new next node')
         await self.send_message_to_ring(m)
 
         # Connect to the leader and send him a hello
-        print(f'/// Connecting to leader: {self.leader_address}:{self.leader_port}')
+        logging.info(f'{self.logical_clock}: Connecting to leader: {self.leader_address}:{self.leader_port}')
         try:
             self.leader_reader, self.leader_writer = await asyncio.open_connection(self.leader_address,
                                                                                    self.leader_port)
         except ConnectionError:
-            print('/// Connection to the leader cannot be opened')
+            logging.error(f'{self.logical_clock}: Connection to the leader cannot be opened')
             sys.exit(1)
         except asyncio.CancelledError:
-            print('CancelledError')
+            logging.error(f'{self.logical_clock}: CancelledError')
             sys.exit(1)
 
         m = self.craft_message(MessageType.hello_leader_message, {})
@@ -438,7 +447,7 @@ class CNode:
         """
         Initialize the server coroutine, make it run forever.
         """
-        print('/// Initializing the server')
+        logging.info(f'{self.logical_clock}: Initializing the server')
         server = await asyncio.start_server(self.run_server, self.address, self.port)
         async with server:
             await server.serve_forever()
@@ -483,15 +492,15 @@ class CNode:
 
                 writer.close()
                 await writer.wait_closed()
-                print('/// Lost connection to previous node')
+                logging.info(f'{self.logical_clock}: Lost connection to previous node')
                 self.prev_node_reader = None
                 self.prev_node_writer = None
                 await asyncio.sleep(0.5)
                 if self.next_node_writer is not None:
-                    print('/// Informing the new prev')
+                    logging.info(f'{self.logical_clock}: Informing the new prev')
                     await self.send_prev_inform_message()
                 else:
-                    print('/// Left alone, became the leader')
+                    logging.info(f'{self.logical_clock}: Left alone, became the leader')
                     self.is_leader = True
                 return
 
@@ -527,7 +536,7 @@ class CNode:
             # Next node is dead, must wait for message telling where to connect
             if self.next_node_writer.is_closing():
 
-                print('/// Waiting for connection...')
+                logging.info(f'{self.logical_clock}: Waiting for connection...')
                 self.next_node_writer = None
                 self.next_node_reader = None
                 self.next_node_address = None
@@ -547,7 +556,7 @@ class CNode:
 
             except (asyncio.CancelledError, ConnectionError) as e:
 
-                print('/// Waiting for connection to the next node...')
+                logging.info(f'{self.logical_clock}: Waiting for connection to the next node...')
                 self.next_node_writer = None
                 self.next_node_reader = None
                 self.next_node_address = None
@@ -574,7 +583,7 @@ class CNode:
 
                 self.next_node_writer.close()
                 await self.next_node_writer.wait_closed()
-                print('/// Lost connection to next node')
+                logging.info(f'{self.logical_clock}: Lost connection to next node')
 
             flag = True
 
@@ -586,11 +595,11 @@ class CNode:
         :param loop: Current event loop.
         """
         while True:
-            message = await loop.run_in_executor(None, input, '>>')
+            message = await loop.run_in_executor(None, input)
 
             if message == '//exit':
 
-                print('/// Exiting...')
+                logging.info(f'{self.logical_clock}: Exiting...')
                 self.exiting = True
 
                 if self.next_node_writer is not None:
@@ -621,10 +630,10 @@ class CNode:
         :param message: CMessage made from the user input.
         """
         if not self.is_leader:
-            print('/// Sending mesage to leader')
+            logging.info(f'{self.logical_clock}: Sending mesage to leader')
             await self.send_message_to_leader(message)
         else:
-            print('/// No need to send user message, distributing')
+            logging.info(f'{self.logical_clock}: No need to send user message, distributing')
             await self.distribute_message(message)
 
     async def send_prev_inform_message(self):
@@ -645,7 +654,7 @@ class CNode:
             self.next_node_writer.write(m.encode())
             await self.next_node_writer.drain()
         except ConnectionRefusedError:
-            print(f'Connection refused while sending: {m}')
+            logging.error(f'{self.logical_clock}: Connection refused while sending: {m}')
 
     async def send_message_to_leader(self, message):
         """
@@ -657,7 +666,7 @@ class CNode:
             self.leader_writer.write(m.encode())
             await self.leader_writer.drain()
         except ConnectionError:
-            print(f'Error - Connection to the leader')
+            logging.error(f'{self.logical_clock}: Error - Connection to the leader')
 
 
 
