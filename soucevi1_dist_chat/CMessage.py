@@ -20,6 +20,7 @@ class MessageType(Enum):
     * prev_connect_message: message sent by previous node previous node after previous node's death
     * i_am_prev_message: message sent by new node to its next node
     * hello_leader_message: let the leader know about new node
+    * elected_message: leader is already elected
     """
     user_message = 1
     election_message = 2
@@ -33,6 +34,7 @@ class MessageType(Enum):
     prev_inform_message = 10
     i_am_prev_message = 11
     hello_leader_message = 12
+    elected_message = 13
 
 
 class CMessage:

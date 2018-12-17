@@ -26,6 +26,8 @@ class CNode:
         self.leader_writer = None
         self.exiting = False
         self.connections = []
+        self.voting = False
+        self.initiate = False
         if is_leader:
             self.leader_address = self.address
             self.leader_port = self.port
@@ -71,11 +73,56 @@ class CNode:
 
             await self.handle_hello_leader_message(message, reader, writer)
 
+        elif m_type == MessageType.election_message:
+
+            logging.info(f'{self.logical_clock}: Received election message from {sender}')
+            await self.handle_election_message(message)
+
+        elif m_type == MessageType.elected_message:
+
+            logging.info(f'{self.logical_clock}: Received elected message from {sender}')
+            await self.handle_elected_message(message)
+
         else:
 
             logging.error(f'{self.logical_clock} Received unknown message type: {m_type}')
 
         self.set_logical_clock(message.time)
+
+    async def handle_elected_message(self, message):
+        self.leader_address = message.message_data['addr']
+        self.leader_port = message.message_data['port']
+        self.voting = False
+
+        logging.info(f'{self.logical_clock}: New leader is {self.leader_address}:{self.leader_port}')
+
+        addr_str = str(message.message_data['addr'] + str(message.message_data['port']))
+        self_addr_str = str(self.address) + str(self.port)
+
+        if addr_str != self_addr_str:
+            logging.info(f'{self.logical_clock}: Passing elected message on...')
+            await self.send_message_to_ring(message)
+
+        if not self.is_leader:
+            await self.connect_to_leader()
+
+    async def handle_election_message(self, message):
+        addr_str = str(message.message_data['addr']) + str(message.message_data['port'])
+        self_addr_str = str(self.address) + str(self.port)
+        if addr_str > self_addr_str:
+            logging.info(f'{self.logical_clock}: Passing election message on...')
+            await self.send_message_to_ring(message)
+            self.voting = True
+        elif addr_str < self_addr_str and not self.voting:
+            logging.info(f'{self.logical_clock}: I am the new leader candidate')
+            m = self.craft_message(MessageType.election_message, {'addr': self.address, 'port': self.port})
+            await self.send_message_to_ring(m)
+            self.voting = True
+        elif addr_str == self_addr_str:
+            logging.info(f'{self.logical_clock}: Received election message with my number -- NEW LEADER')
+            m = self.craft_message(MessageType.elected_message, {'addr': self.address, 'port': self.port})
+            self.is_leader = True
+            await self.send_message_to_ring(m)
 
     async def handle_hello_leader_message(self, message, reader, writer):
         """
@@ -112,7 +159,6 @@ class CNode:
         nodes in the ring.
         :param message: User message to handle
         :param reader: Stream reader
-        :param writer: Stream writer
         """
         print(Colors.BOLD + Colors.CYAN + f'> {message.sender_name}' + Colors.RESET +
               f'({message.sender_port})' + Colors.GREEN + f'[{message.time}]: '
@@ -199,6 +245,8 @@ class CNode:
         m = self.craft_message(MessageType.i_am_prev_message, {})
         await self.send_message_to_ring(m)
         logging.info(f'{self.logical_clock}: Ring renewed')
+        if self.initiate:
+            await self.initiate_election()
 
     async def handle_i_am_prev_message(self, reader, writer):
         """
@@ -418,6 +466,9 @@ class CNode:
         logging.info(f'{self.logical_clock}: Informing new next node')
         await self.send_message_to_ring(m)
 
+        await self.connect_to_leader()
+
+    async def connect_to_leader(self):
         # Connect to the leader and send him a hello
         logging.info(f'{self.logical_clock}: Connecting to leader: {self.leader_address}:{self.leader_port}')
         try:
@@ -584,6 +635,8 @@ class CNode:
                 self.next_node_writer.close()
                 await self.next_node_writer.wait_closed()
                 logging.info(f'{self.logical_clock}: Lost connection to next node')
+                if self.next_node_address == self.leader_address and self.next_node_port == self.leader_port:
+                    self.initiate = True
 
             flag = True
 
@@ -659,7 +712,7 @@ class CNode:
     async def send_message_to_leader(self, message):
         """
         Send given message directly to the leader node.
-        :param message: CMessag to be sent
+        :param message: CMessage to be sent
         """
         m = message.convert_to_string()
         try:
@@ -667,6 +720,11 @@ class CNode:
             await self.leader_writer.drain()
         except ConnectionError:
             logging.error(f'{self.logical_clock}: Error - Connection to the leader')
+
+    async def initiate_election(self):
+        self.voting = True
+        m = self.craft_message(MessageType.election_message, {'addr': self.address, 'port': self.port})
+        await self.send_message_to_ring(m)
 
 
 
