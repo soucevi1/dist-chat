@@ -62,6 +62,7 @@ class CMessage:
             self.sender_port = kwargs['sender_port']
             self.sender_name = kwargs['sender_name']
             self.message_data = kwargs['message_data']
+            self.time = kwargs['time']
             if type(kwargs['message_type']) == int:
                 self.message_type = kwargs['message_type']
             else:
@@ -77,7 +78,8 @@ class CMessage:
         d = {'s_addr': self.sender_address,
              's_port': self.sender_port,
              's_name': self.sender_name,
-             'data': self.message_data}
+             'data': self.message_data,
+             'time': self.time}
 
         if type(self.message_type) == int:
             d['m_type'] = self.message_type
@@ -95,7 +97,8 @@ class CMessage:
         d = {'s_addr': self.sender_address,
              's_port': self.sender_port,
              's_name': self.sender_name,
-             'data': self.message_data}
+             'data': self.message_data,
+             'time': self.time}
 
         if type(self.message_type) == int:
             d['m_type'] = self.message_type
@@ -114,6 +117,7 @@ class CMessage:
         self.sender_port = received_json['s_port']
         self.sender_name = received_json['s_name']
         self.message_data = received_json['data']
+        self.time = received_json['time']
         if type(received_json['m_type']) == int:
             self.message_type = received_json['m_type']
         else:
@@ -136,3 +140,4 @@ class CMessage:
         print(f'Name: {self.sender_name}')
         print(f'Type: {self.message_type} ({MessageType(self.message_type)})')
         print(f'Data: {self.message_data}')
+        print(f'Time: {self.time}')

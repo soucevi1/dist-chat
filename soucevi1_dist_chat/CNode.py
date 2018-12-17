@@ -73,6 +73,8 @@ class CNode:
 
             print(f'/// Unknown message type: {m_type}')
 
+        self.set_logical_clock(message.time)
+
     async def handle_hello_leader_message(self, message, reader, writer):
         """
         New node registers to the message broadcast.
@@ -96,7 +98,7 @@ class CNode:
         :param message: Original hello message
         """
         m = self.craft_message(MessageType.user_message, f'{message.sender_name} joined the ring!')
-        await self.distribute_message(m, exc=(message.sender_address, message.sender_port))
+        await self.distribute_message(m)
 
     async def handle_user_message(self, message, reader):
         """
@@ -109,7 +111,7 @@ class CNode:
         :param reader: Stream reader
         :param writer: Stream writer
         """
-        print(f'> {message.sender_name}({message.sender_port}): {message.message_data}')
+        print(f'> {message.sender_name}({message.sender_port})[{message.time}]: {message.message_data}')
         if self.is_leader:
             if not self.find_in_connections(reader):
                 print('/// Received user message from unknown node')
@@ -121,7 +123,6 @@ class CNode:
         Add new connection to the broadcasting list.
         :param message: Received user message
         :param reader: Stream reader
-        :param writer: Stream witer
         """
         conn = {
             'addr': message.sender_address,
@@ -374,6 +375,7 @@ class CNode:
         answer = answer_raw.decode()
         m_answer = CMessage(message_str=answer)
         answer_data = m_answer.message_data
+        self.set_logical_clock(m_answer.time)
 
         # Save the old writer to close it in the end.
         old_w = self.next_node_writer
@@ -428,7 +430,9 @@ class CNode:
         :param other_clock: Logical clock of the node it is
         synchronizing with.
         """
-        ...
+        if other_clock > self.logical_clock:
+            self.logical_clock = other_clock
+        self.logical_clock += 1
 
     async def server_init(self):
         """
@@ -608,7 +612,7 @@ class CNode:
         :return: CMessage instance
         """
         message = CMessage(sender_address=self.address, sender_port=self.port, sender_name=self.name,
-                           message_type=m_type, message_data=data)
+                           message_type=m_type, message_data=data, time=self.logical_clock)
         return message
 
     async def send_user_message(self, message):
@@ -654,5 +658,6 @@ class CNode:
             await self.leader_writer.drain()
         except ConnectionError:
             print(f'Error - Connection to the leader')
+
 
 
