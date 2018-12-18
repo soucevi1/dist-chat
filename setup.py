@@ -7,7 +7,7 @@ with open('README.rst') as f:
 
 setup(
     name='soucevi1_dist_chat',
-    version='0.1',
+    version='0.1.1',
     packages=find_packages(),
     url='https://github.com/soucevi1/dist-chat',
     author='Vit Soucek',
@@ -33,8 +33,6 @@ setup(
     install_requires=[
         'click',
         'setuptools',
-        'asyncio',
-        'logging',
         'prompt_toolkit',
     ]
 )
