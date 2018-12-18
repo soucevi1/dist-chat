@@ -6,3 +6,5 @@ poznamky2.txt poznamky.txt
 poznamky*
 *.pyc
 chat_*
+*egg*
+dist
