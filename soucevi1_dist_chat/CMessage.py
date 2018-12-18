@@ -8,33 +8,18 @@ class MessageType(Enum):
     * user_message: chat message sent by another user
     * election_message: message used during the elections
     * login_message: message sent by the node that wants to log in
-    * leader_info_message: message sent as a response to login_message
-                         by the node that is not a leader, contains
-                         information about the leader node
-    * info_message: message sent as a response to login_message by the leader node,
-                  contains information about the chatroom
-    * logout_message: message sent if a non-leader node want to log out
-    * logout_election_message: message sent if a leader wants to log out, initiates election
-    * new_message: message created from the user input, to be sent to the leader
-    * prev_info_message: previous node is dead, inform its previous node about address and port to connect to
-    * prev_connect_message: message sent by previous node previous node after previous node's death
-    * i_am_prev_message: message sent by new node to its next node
+    * prev_inform_message: previous node is dead, inform its previous node about address and port to connect to
+    * i_am_prev_message: message sent by new prev node to its next node
     * hello_leader_message: let the leader know about new node
     * elected_message: leader is already elected
     """
     user_message = 1
-    election_message = 2
-    login_message = 3
-    leader_info_message = 4
-    info_message = 5
-    logout_message = 6
-    logout_election_message = 7
-    new_message = 8
-    prev_connect_message = 9
-    prev_inform_message = 10
-    i_am_prev_message = 11
-    hello_leader_message = 12
-    elected_message = 13
+    login_message = 2
+    prev_inform_message = 3
+    i_am_prev_message = 4
+    hello_leader_message = 5
+    election_message = 6
+    elected_message = 7
 
 
 class CMessage:

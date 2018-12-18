@@ -33,5 +33,8 @@ setup(
     install_requires=[
         'click',
         'setuptools',
+        'asyncio',
+        'logging',
+        'prompt_toolkit',
     ]
 )
