@@ -3,6 +3,9 @@ import asyncio
 import sys
 import logging
 from soucevi1_dist_chat.colors import Colors
+from prompt_toolkit import prompt
+from prompt_toolkit.eventloop.defaults import use_asyncio_event_loop
+from prompt_toolkit.patch_stdout import patch_stdout
 
 
 class CNode:
@@ -10,9 +13,9 @@ class CNode:
     Class that represents the node -- one participant of the chat.
     """
 
-    def __init__(self, is_leader, port, neighbor_address, neighbor_port, name=''):
+    def __init__(self, is_leader, address, port, neighbor_address, neighbor_port, name=''):
         self.name = name
-        self.address = '127.0.0.1'
+        self.address = address
         self.port = port
         self.next_node_address = neighbor_address
         self.next_node_port = neighbor_port
@@ -383,7 +386,6 @@ class CNode:
         """
 
         logging.info(f'{self.logical_clock}: Starting node on port: {self.port}')
-        loop = asyncio.get_event_loop()
         server_coro = asyncio.create_task(self.server_init())
 
         # If node is the leader, it just needs to wait for a connection
@@ -411,7 +413,7 @@ class CNode:
         logging.info(f'{self.logical_clock}: Initialize socket reading')
         socket_coro = asyncio.create_task(self.read_socket())
         logging.info(f'{self.logical_clock} Initialize input reading')
-        input_coro = asyncio.create_task(self.read_input(loop))
+        input_coro = asyncio.create_task(self.read_input())
 
         print(Colors.GREEN + "/// Welcome to the dist-chat, you're free to write messages now. ///" + Colors.RESET)
 
@@ -590,6 +592,8 @@ class CNode:
                 else:
                     logging.info(f'{self.logical_clock}: Left alone, became the leader')
                     self.is_leader = True
+                    self.leader_address = self.address
+                    self.leader_port = self.port
                 return
 
             message = CMessage(message_str=data.decode())
@@ -677,15 +681,18 @@ class CNode:
 
             flag = True
 
-    async def read_input(self, loop):
+    async def read_input(self):
         """
         Coroutine reading the user's keyboard input and
         transforming it into the CMessage.
         If '//exit' is read here, the program exits.
-        :param loop: Current event loop.
         """
+        use_asyncio_event_loop()
+
         while True:
-            message = await loop.run_in_executor(None, input)
+
+            with patch_stdout():
+                message = await prompt(f'> {self.name}({self.port}): ', async_=True)
 
             if message == '//exit':
 
