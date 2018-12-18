@@ -46,6 +46,8 @@ class CNode:
         m_type = MessageType(message.message_type)
         sender = message.sender_address, message.sender_port
 
+        self.set_logical_clock(message.time)
+
         # New node wants to log in
         if m_type == MessageType.login_message:
 
@@ -87,19 +89,23 @@ class CNode:
 
             logging.error(f'{self.logical_clock} Received unknown message type: {m_type}')
 
-        self.set_logical_clock(message.time)
-
     async def handle_elected_message(self, message):
+        """
+        When received elected_message, it means the new leader is known already.
+        This message should run around the circle until it comes to the sender
+        (leader) again. All non-leader nodes should connect to the leader.
+        :param message: CMessage with new leader information
+        """
         self.leader_address = message.message_data['addr']
         self.leader_port = message.message_data['port']
         self.voting = False
 
         logging.info(f'{self.logical_clock}: New leader is {self.leader_address}:{self.leader_port}')
 
-        addr_str = str(message.message_data['addr'] + str(message.message_data['port']))
-        self_addr_str = str(self.address) + str(self.port)
+        sender_id = str(message.message_data['addr'] + str(message.message_data['port']))
+        self_id = str(self.address) + str(self.port)
 
-        if addr_str != self_addr_str:
+        if sender_id != self_id:
             logging.info(f'{self.logical_clock}: Passing elected message on...')
             await self.send_message_to_ring(message)
 
@@ -107,18 +113,34 @@ class CNode:
             await self.connect_to_leader()
 
     async def handle_election_message(self, message):
-        addr_str = str(message.message_data['addr']) + str(message.message_data['port'])
-        self_addr_str = str(self.address) + str(self.port)
-        if addr_str > self_addr_str:
+        """
+        Election messages are the main communication during the
+        Chang-Roberts algorithm. The node with the biggest ID
+        (concatenated string "IP+port") will become the next leader.
+        This coroutine is the main body of the Chang-Roberts algorithm.
+        :param message: Election CMessage from the previous node
+        """
+        sender_id = str(message.message_data['addr']) + str(message.message_data['port'])
+        self_id = str(self.address) + str(self.port)
+
+        if sender_id > self_id:
+
+            # If the sender of the message as bigger ID, he's the candidate.
             logging.info(f'{self.logical_clock}: Passing election message on...')
             await self.send_message_to_ring(message)
             self.voting = True
-        elif addr_str < self_addr_str and not self.voting:
+
+        elif sender_id < self_id and not self.voting:
+
+            # If this node has bigger ID, he's the candidate.
             logging.info(f'{self.logical_clock}: I am the new leader candidate')
             m = self.craft_message(MessageType.election_message, {'addr': self.address, 'port': self.port})
             await self.send_message_to_ring(m)
             self.voting = True
-        elif addr_str == self_addr_str:
+
+        elif sender_id == self_id:
+
+            # If the message arrived with this node's ID, he won the election.
             logging.info(f'{self.logical_clock}: Received election message with my number -- NEW LEADER')
             m = self.craft_message(MessageType.elected_message, {'addr': self.address, 'port': self.port})
             self.is_leader = True
@@ -148,6 +170,10 @@ class CNode:
         :param message: Original hello message
         """
         m = self.craft_message(MessageType.user_message, f'{message.sender_name} joined the ring!')
+
+        # The leader user needs to be told about the new node too...
+        self.print_user_message(m)
+
         await self.distribute_message(m)
 
     async def handle_user_message(self, message, reader):
@@ -160,14 +186,21 @@ class CNode:
         :param message: User message to handle
         :param reader: Stream reader
         """
-        print(Colors.BOLD + Colors.CYAN + f'> {message.sender_name}' + Colors.RESET +
-              f'({message.sender_port})' + Colors.GREEN + f'[{message.time}]: '
-              + Colors.RESET + f'{message.message_data}')
+        self.print_user_message(message)
         if self.is_leader:
             if not self.find_in_connections(reader):
                 logging.error(f'{self.logical_clock}: Received user message from unknown node')
                 await self.add_connection_record(message, reader)
             await self.distribute_message(message)
+
+    def print_user_message(self, message):
+        """
+        Print received user message.
+        :param message: CMessage to be printed.
+        """
+        print(Colors.BOLD + Colors.CYAN + f'> {message.sender_name}' + Colors.RESET +
+              f'({message.sender_port})' + Colors.GREEN + f'[{message.time}]: '
+              + Colors.RESET + f'{message.message_data}')
 
     async def add_connection_record(self, message, reader):
         """
@@ -206,16 +239,22 @@ class CNode:
         :param exc: Exception in distribution: IP and port of a node that will not receive the message
         """
         for conn in self.connections:
+
             # Do not send the message back to the sender
             if conn['addr'] == message.sender_address and conn['port'] == message.sender_port:
                 continue
+
             if exc and conn['addr'] == exc[0] and conn['port'] == exc[1]:
                 continue
+
             try:
+
                 logging.info(f'{self.logical_clock}: Distribution to: {conn["addr"]}:{conn["port"]}')
                 conn['writer'].write(message.convert_to_string().encode())
                 await conn['writer'].drain()
+
             except ConnectionError:
+
                 logging.error(f'{self.logical_clock}: {conn["addr"]}:{conn["port"]} not reachable to broadcast')
                 self.remove_from_connections(conn['reader'], conn['writer'])
 
@@ -490,9 +529,7 @@ class CNode:
         :param other_clock: Logical clock of the node it is
         synchronizing with.
         """
-        if other_clock > self.logical_clock:
-            self.logical_clock = other_clock
-        self.logical_clock += 1
+        self.logical_clock = max(self.logical_clock, other_clock) + 1
 
     async def server_init(self):
         """
@@ -667,12 +704,14 @@ class CNode:
     def craft_message(self, m_type, data):
         """
         Create CMessage instance with information about
-        the sender (current node), given type and body
+        the sender (current node), given type and body.
+        First, logical clock needs to be incremented.
         :param m_type: Type of the message
         :type m_type: MessageType
         :param data: Main body of the message.
         :return: CMessage instance
         """
+        self.logical_clock = self.logical_clock + 1
         message = CMessage(sender_address=self.address, sender_port=self.port, sender_name=self.name,
                            message_type=m_type, message_data=data, time=self.logical_clock)
         return message
@@ -722,6 +761,11 @@ class CNode:
             logging.error(f'{self.logical_clock}: Error - Connection to the leader')
 
     async def initiate_election(self):
+        """
+        After the death of the leader, the ring must be renewed at first.
+        After the ring is renewed, the node who was previous to the leader
+        initiates the election algorithm.
+        """
         self.voting = True
         m = self.craft_message(MessageType.election_message, {'addr': self.address, 'port': self.port})
         await self.send_message_to_ring(m)
