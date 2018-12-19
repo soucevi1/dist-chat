@@ -66,11 +66,11 @@ Chatting
 
 Once you start the *leader*, you won't be able to do anything until the first connection of another node is made. After that, you get a prompt that looks like this::
 
-   > Name(port): 
+   > Name(IP:port): 
 
 Where you can write your message and press Enter to send it. Received message looks simillar::
 
-   > Name(port)[Lamport timestamp]: Hello from Name
+   > Name(IP:port)[Lamport timestamp]: Hello from Name
 
 
 To exit the application, instead of your message simply write ``//exit``.

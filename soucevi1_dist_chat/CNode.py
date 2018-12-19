@@ -692,7 +692,7 @@ class CNode:
         while True:
 
             with patch_stdout():
-                message = await prompt(f'> {self.name}({self.port}): ', async_=True)
+                message = await prompt(f'> {self.name}({self.address}:{self.port}): ', async_=True)
 
             if message == '//exit':
 
