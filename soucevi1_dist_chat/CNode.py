@@ -202,7 +202,7 @@ class CNode:
         :param message: CMessage to be printed.
         """
         print(Colors.BOLD + Colors.CYAN + f'> {message.sender_name}' + Colors.RESET +
-              f'({message.sender_port})' + Colors.GREEN + f'[{message.time}]: '
+              f'({message.sender_address}:{message.sender_port})' + Colors.GREEN + f'[{message.time}]: '
               + Colors.RESET + f'{message.message_data}')
 
     async def add_connection_record(self, message, reader):

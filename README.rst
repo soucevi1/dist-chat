@@ -5,7 +5,7 @@ This program is a semestral project on MI-PYT and MI-DSV courses. It is implemen
 
 Since a few new AsyncIO features were used in this program, it is necessary to have Python 3.7 or higher to run it.
 
-This application is a chat room program. However, it does not use a simple server-client way. All nodes are clients, any node can be a server from this point o view. 
+This application is a chat room program. However, it does not use a simple server-client way. All nodes are clients, any node can be a server from this point of view. 
 
 For better understanding, the server (node that manages the user messages) will be referred to as the *leader* and the AsyncIO component of the application that listens on the given port will be refered to as the *server* further on in the docuentation. Meaning that any node has a *server*, however only one node in the chatroom is the *leader*.
 
@@ -46,7 +46,7 @@ Where ``<IP>`` and ``<port>`` is the IP address and port the node will listen on
 Joining the existing chatroom
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-To join the existing chatroom, you need to know IP ``<nIP>`` and port ``<nPort>`` of a node that is already in the chatroom type::
+To join the existing chatroom, you need to know IP ``<nIP>`` and port ``<nPort>`` of any node that is already in the chatroom::
 
    soucevi1_dist_chat -a <IP> -p <port> -n <your name> -na <nIP> -np <nPort>
 
