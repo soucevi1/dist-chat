@@ -76,7 +76,7 @@ class CNode:
 
         elif m_type == MessageType.hello_leader_message:
 
-            await self.handle_hello_leader_message(message, reader, writer)
+            await self.handle_hello_leader_message(message, reader)
 
         elif m_type == MessageType.election_message:
 
@@ -112,6 +112,8 @@ class CNode:
             logging.info(f'{self.logical_clock}: Passing elected message on...')
             await self.send_message_to_ring(message)
 
+        self.set_logical_clock(self.logical_clock)
+
         if not self.is_leader:
             await self.connect_to_leader()
 
@@ -129,7 +131,8 @@ class CNode:
         if sender_id > self_id:
 
             # If the sender of the message as bigger ID, he's the candidate.
-            logging.info(f'{self.logical_clock}: Passing election message on...')
+            logging.info(f'{self.logical_clock}: Passing election message on. '
+                         f'Candidate: {message.message_data["addr"]}:{message.message_data["port"]}')
             await self.send_message_to_ring(message)
             self.voting = True
 
@@ -149,7 +152,7 @@ class CNode:
             self.is_leader = True
             await self.send_message_to_ring(m)
 
-    async def handle_hello_leader_message(self, message, reader, writer):
+    async def handle_hello_leader_message(self, message, reader):
         """
         New node registers to the message broadcast.
         :param message:
@@ -160,8 +163,6 @@ class CNode:
             # Connection already exists
             logging.error(f'{self.logical_clock}: Hello leader received from known node!')
             return
-        logging.info(f'{self.logical_clock}: Adding {message.sender_address}:'
-                     f'{message.sender_port} to the broadcast list')
         await self.add_connection_record(message, reader)
         logging.info(f'{self.logical_clock}: Number of connections: {len(self.connections)}')
         await self.send_hello_from_leader(message)
@@ -222,6 +223,8 @@ class CNode:
             logging.error(f'{self.logical_clock}: Cannot open backwards connection to client')
             return
         self.connections.append(conn)
+        logging.info(f'{self.logical_clock}: Adding {message.sender_address}:{message.sender_port} to the list')
+        self.set_logical_clock(self.logical_clock)
 
     def find_in_connections(self, reader):
         """
@@ -261,6 +264,8 @@ class CNode:
                 logging.error(f'{self.logical_clock}: {conn["addr"]}:{conn["port"]} not reachable to broadcast')
                 self.remove_from_connections(conn['reader'], conn['writer'])
 
+            self.set_logical_clock(self.logical_clock)
+
     async def handle_prev_inform_message(self, message):
         """
         A node died. Its next node detects it and sends
@@ -287,6 +292,7 @@ class CNode:
         m = self.craft_message(MessageType.i_am_prev_message, {})
         await self.send_message_to_ring(m)
         logging.info(f'{self.logical_clock}: Ring renewed')
+        self.set_logical_clock(self.logical_clock)
         if self.initiate:
             await self.initiate_election()
 
@@ -318,7 +324,7 @@ class CNode:
         :param writer: Writer stream of the new node
         """
 
-        # If the node is the leader without other conections
+        # If the node is the leader without other connections
         if self.next_node_port is None or self.next_node_address is None:
 
             answer = {
@@ -346,6 +352,7 @@ class CNode:
             logging.info(f'{self.logical_clock}: Sending info to the new node')
             writer.write(s_answer.encode())
             await writer.drain()
+            self.set_logical_clock(self.logical_clock)
 
         except ConnectionRefusedError:
 
@@ -360,6 +367,7 @@ class CNode:
             logging.info(f'{self.logical_clock}: Opening connection to new next')
             self.next_node_reader, self.next_node_writer = await asyncio.open_connection(self.next_node_address,
                                                                                          self.next_node_port)
+            self.set_logical_clock(self.logical_clock)
 
         except ConnectionRefusedError:
 
@@ -386,6 +394,8 @@ class CNode:
         """
 
         logging.info(f'{self.logical_clock}: Starting node on port: {self.port}')
+        self.set_logical_clock(self.logical_clock)
+
         server_coro = asyncio.create_task(self.server_init())
 
         # If node is the leader, it just needs to wait for a connection
@@ -405,15 +415,20 @@ class CNode:
                 logging.critical(f'{self.logical_clock}: Invalid IP or port passed in argument')
                 sys.exit(1)
 
-            logging.info(f'{self.logical_clock} Initial connection established with ' 
+            logging.info(f'{self.logical_clock}: Initial connection established with ' 
                          f'{self.next_node_address}:{self.next_node_port}')
+            self.set_logical_clock(self.logical_clock)
+
             await self.join_the_ring()
             logging.info(f'{self.logical_clock}: Ring joined')
 
         logging.info(f'{self.logical_clock}: Initialize socket reading')
         socket_coro = asyncio.create_task(self.read_socket())
-        logging.info(f'{self.logical_clock} Initialize input reading')
+        self.set_logical_clock(self.logical_clock)
+
+        logging.info(f'{self.logical_clock}: Initialize input reading')
         input_coro = asyncio.create_task(self.read_input())
+        self.set_logical_clock(self.logical_clock)
 
         print(Colors.GREEN + "/// Welcome to the dist-chat, you're free to write messages now. ///" + Colors.RESET)
 
@@ -443,6 +458,7 @@ class CNode:
             # Try if already connected
             if self.next_node_reader is not None:
                 logging.info(f'{self.logical_clock}: First connection - waking up...')
+                self.set_logical_clock(self.logical_clock)
                 break
 
             # Not connected -- pass the execution for a while
@@ -497,10 +513,13 @@ class CNode:
             logging.error(f'{self.logical_clock}: Connection to the next node cannot be opened')
             sys.exit(1)
 
+        self.set_logical_clock(self.logical_clock)
+
         # Close the old connection now.
         old_w.close()
         await old_w.wait_closed()
         logging.info(f'{self.logical_clock}: Closed old connection')
+        self.set_logical_clock(self.logical_clock)
 
         # Inform next node to change its prev
         m = self.craft_message(MessageType.i_am_prev_message, {})
@@ -522,6 +541,8 @@ class CNode:
             logging.error(f'{self.logical_clock}: CancelledError')
             sys.exit(1)
 
+        self.set_logical_clock(self.logical_clock)
+
         m = self.craft_message(MessageType.hello_leader_message, {})
         await self.send_message_to_leader(m)
 
@@ -538,6 +559,7 @@ class CNode:
         Initialize the server coroutine, make it run forever.
         """
         logging.info(f'{self.logical_clock}: Initializing the server')
+        self.set_logical_clock(self.logical_clock)
         server = await asyncio.start_server(self.run_server, self.address, self.port)
         async with server:
             await server.serve_forever()
@@ -583,6 +605,7 @@ class CNode:
                 writer.close()
                 await writer.wait_closed()
                 logging.info(f'{self.logical_clock}: Lost connection to previous node')
+                self.set_logical_clock(self.logical_clock)
                 self.prev_node_reader = None
                 self.prev_node_writer = None
                 await asyncio.sleep(0.5)
@@ -676,6 +699,7 @@ class CNode:
                 self.next_node_writer.close()
                 await self.next_node_writer.wait_closed()
                 logging.info(f'{self.logical_clock}: Lost connection to next node')
+                self.set_logical_clock(self.logical_clock)
                 if self.next_node_address == self.leader_address and self.next_node_port == self.leader_port:
                     self.initiate = True
 
@@ -718,7 +742,6 @@ class CNode:
         :param data: Main body of the message.
         :return: CMessage instance
         """
-        self.logical_clock = self.logical_clock + 1
         message = CMessage(sender_address=self.address, sender_port=self.port, sender_name=self.name,
                            message_type=m_type, message_data=data, time=self.logical_clock)
         return message
@@ -729,7 +752,7 @@ class CNode:
         :param message: CMessage made from the user input.
         """
         if not self.is_leader:
-            logging.info(f'{self.logical_clock}: Sending mesage to leader')
+            logging.info(f'{self.logical_clock}: Sending message to leader')
             await self.send_message_to_leader(message)
         else:
             logging.info(f'{self.logical_clock}: No need to send user message, distributing')
@@ -742,6 +765,7 @@ class CNode:
         data = {'new_next_IP': self.address, 'new_next_port': self.port}
         message = self.craft_message(MessageType.prev_inform_message, data)
         await self.send_message_to_ring(message)
+        self.set_logical_clock(self.logical_clock)
 
     async def send_message_to_ring(self, message):
         """
@@ -754,6 +778,7 @@ class CNode:
             await self.next_node_writer.drain()
         except ConnectionRefusedError:
             logging.error(f'{self.logical_clock}: Connection refused while sending: {m}')
+        self.set_logical_clock(self.logical_clock)
 
     async def send_message_to_leader(self, message):
         """
@@ -766,6 +791,7 @@ class CNode:
             await self.leader_writer.drain()
         except ConnectionError:
             logging.error(f'{self.logical_clock}: Error - Connection to the leader')
+        self.set_logical_clock(self.logical_clock)
 
     async def initiate_election(self):
         """
@@ -773,6 +799,8 @@ class CNode:
         After the ring is renewed, the node who was previous to the leader
         initiates the election algorithm.
         """
+        logging.info(f'{self.logical_clock}: Initializing leader election...')
+        self.set_logical_clock(self.logical_clock)
         self.voting = True
         m = self.craft_message(MessageType.election_message, {'addr': self.address, 'port': self.port})
         await self.send_message_to_ring(m)
