@@ -3,7 +3,7 @@ Distributed chat based on Chang-Roberts algorithm
 
 This program is a semestral project on MI-PYT and MI-DSV courses. It is implemented in Python 3.7 and uses `AsyncIO <https://docs.python.org/3/library/asyncio.html>`_.
 
-Since a few new AsyncIO features were used in this program, it is necessary to have Python 3.7 or higher to run it.
+Since a few new AsyncIO features were used in this program, it is necessary to have **Python 3.7 or higher** to run it.
 
 This application is a chat room program. However, it does not use a simple server-client way. All nodes are clients, any node can be a server from this point of view. 
 
