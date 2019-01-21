@@ -147,3 +147,45 @@ async def test_handle_prev_inform_message(node_instance, message_instance):
 async def test_wait_for_connection(node_instance):
     node_instance.next_node_reader = 'reader'
     await node_instance.wait_for_connection()
+    # Test is not stuck in an endless loop
+    assert node_instance.next_node_reader == 'reader'
+
+
+@pytest.mark.asyncio
+async def test_join_the_ring(node_instance, message_instance):
+    message_instance.message_data = {'next_IP': '1.1.1.1',
+                                     'next_port': '11111',
+                                     'leader_IP': '2.2.2.2',
+                                     'leader_port': '22222'}
+    node_instance.next_node_reader = asyncio.StreamReader()
+    node_instance.next_node_writer = asyncio.StreamWriter(None, None, None, None)
+    with patch('soucevi1_dist_chat.CNode.CNode.send_message_to_ring', new=CoroutineMock()) as mocked_send:
+        with patch('asyncio.StreamReader.read', new=CoroutineMock()) as mocked_read:
+            mocked_read.return_value = message_instance.convert_to_string().encode()
+            with patch('asyncio.StreamWriter.wait_closed', new=CoroutineMock()) as mocked_closed:
+                with patch('asyncio.StreamWriter.close') as mocked_close:
+                    with patch('asyncio.open_connection', new=CoroutineMock()) as mocked_open:
+                        mocked_open.return_value = ('reader', 'writer')
+                        with patch('soucevi1_dist_chat.CNode.CNode.connect_to_leader',
+                                   new=CoroutineMock()) as mocked_connect:
+                            await node_instance.join_the_ring()
+                            mocked_connect.asset_called_once()
+                            assert mocked_send.call_count == 2
+                            assert node_instance.next_node_address == message_instance.message_data['next_IP']
+                            assert node_instance.next_node_port == message_instance.message_data['next_port']
+                            assert node_instance.leader_address == message_instance.message_data['leader_IP']
+                            assert node_instance.leader_port == message_instance.message_data['leader_port']
+
+
+@pytest.mark.asyncio
+async def test_connect_to_leader(node_instance, message_instance):
+    node_instance.leader_address = '1.2.3.4'
+    node_instance.leader_port = '12345'
+    with patch('asyncio.open_connection', new=CoroutineMock()) as mocked_open:
+        mocked_open.return_value = ('reader', 'writer')
+        with patch('soucevi1_dist_chat.CNode.CNode.send_message_to_leader', new=CoroutineMock()) as mocked_send:
+            await node_instance.connect_to_leader()
+            mocked_open.assert_called_once_with(node_instance.leader_address, node_instance.leader_port)
+            mocked_send.assert_called_once()
+
+
