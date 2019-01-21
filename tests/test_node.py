@@ -82,3 +82,25 @@ async def test_handle_elected_message(node_instance, message_instance):
             assert node_instance.leader_address == '127.0.0.1'
             assert node_instance.leader_port == '8888'
 
+
+@pytest.mark.asyncio
+async def test_handle_election_message(node_instance, message_instance):
+    message_instance.message_type = MessageType.election_message
+    message_instance.message_data = {'addr': '127.0.0.1', 'port': '99999'}
+    with patch('soucevi1_dist_chat.CNode.CNode.send_message_to_ring', new=CoroutineMock()) as mocked_send:
+        # Test losing node -- pass the message on
+        message_instance.message_data = {'addr': '127.0.0.1', 'port': '99999'}
+        await node_instance.handle_election_message(message_instance)
+        mocked_send.assert_called_once_with(message_instance)
+
+        # Test candidate node -- send message with this node's address
+        message_instance.message_data = {'addr': '127.0.0.1', 'port': '11111'}
+        await node_instance.handle_election_message(message_instance)
+        message_new = message_instance
+        message_new.message_data = {'addr': node_instance.address, 'port': node_instance.port}
+        mocked_send.assert_called_once_with(message_new)
+
+        # Test winning node -- send Elected message
+        message_instance.message_data = {'addr': '127.0.0.1', 'port': '12345'}
+        await node_instance.handle_election_message(message_instance)
+        assert node_instance.is_leader
