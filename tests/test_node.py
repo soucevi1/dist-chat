@@ -104,3 +104,22 @@ async def test_handle_election_message(node_instance, message_instance):
         message_instance.message_data = {'addr': '127.0.0.1', 'port': '12345'}
         await node_instance.handle_election_message(message_instance)
         assert node_instance.is_leader
+
+
+@pytest.mark.asyncio
+async def test_add_connection_record(node_instance, message_instance):
+    node_instance.connections = [{'addr': '1.1.1.1', 'port': '1111', 'reader': 'reader1', 'writer': 'writer1'}]
+    with patch('asyncio.open_connection', new=CoroutineMock()) as mocked_open:
+        mocked_open.return_value = 'reader2', 'writer2'
+        await node_instance.add_connection_record(message_instance, 'reader3')
+        assert node_instance.connections == [{'addr': '1.1.1.1', 'port': '1111',
+                                              'reader': 'reader1', 'writer': 'writer1'},
+                                             {'addr': '127.0.0.1', 'port': '54321',
+                                              'reader': 'reader3', 'writer': 'writer2'}]
+
+
+def test_find_in_connections(node_instance):
+    node_instance.connections = [{'addr': '1.1.1.1', 'port': '1111', 'reader': 'reader1', 'writer': 'writer1'},
+                                 {'addr': '127.0.0.1', 'port': '54321', 'reader': 'reader3', 'writer': 'writer2'}]
+    assert node_instance.find_in_connections('reader3')
+    assert not node_instance.find_in_connections('reader256')
