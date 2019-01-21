@@ -28,7 +28,6 @@ The leader is the only node in the chatroom that actually knows and is connected
 
 When the leader disconnects or dies, a new one must be elected. How it's done it described in the next sections.
 
-
 The Network Topology
 ^^^^^^^^^^^^^^^^^^^^
 The chatroom is defined as one network ring. This means that any node only knows its two neighbors, in the program called *next* and *previous*. Plus, every node knows the leader in order to sent it a message.
@@ -63,6 +62,19 @@ When a node ``X`` receives the election message with candidate ``Y`` inside, the
      This means that the node ``X`` just received the election message it sent when the message was passing with a lower candidate ID. Node ``X`` just won the election
 
 When a node wins the election, it sends the elected message to the ring. The elected message tells the other nodes who the winner is. All the other nodes immediately open a new connection to the newly elected leader.
+
+
+Logical Time
+^^^^^^^^^^^^
+Any message sent in the program and any log message has a time stamp. This time stamp contains the logical time.
+
+The logical time is calculated using `Lamport's algorithm <https://en.wikipedia.org/wiki/Lamport_timestamps>`_.
+
+Basically, what happens, is:
+   * Any node starts with logical time 0
+   * When a process (a node) makes a *significant* action, its logical time is incremented by 1
+   * When a node ``X`` receives a message from another node (``Y``), it synchronizes its logical time and increments it
+       - ``time(X)`` = max( time(X), time(Y) ) + 1
 
 Logging in
 ^^^^^^^^^^
