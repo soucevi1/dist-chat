@@ -34,5 +34,14 @@ setup(
         'click',
         'setuptools',
         'prompt_toolkit',
+        'asyncio'
+    ],
+    setup_requires=[
+        'pytest-runner'
+    ],
+    tests_require=[
+        'pytest',
+        'asyncio',
+        'asynctest',
     ]
 )

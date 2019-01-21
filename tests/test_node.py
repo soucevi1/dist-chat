@@ -1,6 +1,5 @@
 import pytest
 import asyncio
-import pytest_asyncio
 from asynctest import CoroutineMock
 from unittest.mock import patch
 from soucevi1_dist_chat.CMessage import CMessage
