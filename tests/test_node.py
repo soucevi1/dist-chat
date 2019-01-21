@@ -123,3 +123,27 @@ def test_find_in_connections(node_instance):
                                  {'addr': '127.0.0.1', 'port': '54321', 'reader': 'reader3', 'writer': 'writer2'}]
     assert node_instance.find_in_connections('reader3')
     assert not node_instance.find_in_connections('reader256')
+
+
+@pytest.mark.asyncio
+async def test_handle_prev_inform_message(node_instance, message_instance):
+    # This node's next did not die
+    node_instance.next_node_writer = 'writer'
+    with patch('soucevi1_dist_chat.CNode.CNode.send_message_to_ring', new=CoroutineMock()) as mocked_send:
+        await node_instance.handle_prev_inform_message(message_instance)
+        mocked_send.assert_called_once_with(message_instance)
+
+    # This node's next died
+    node_instance.next_node_writer = None
+    with patch('asyncio.open_connection', new=CoroutineMock()) as mocked_open:
+        mocked_open.return_value = ('reader', 'writer')
+        with patch('soucevi1_dist_chat.CNode.CNode.send_message_to_ring', new=CoroutineMock()) as mocked_send:
+            await node_instance.handle_prev_inform_message(message_instance)
+            mocked_open.assert_called_once_with(message_instance.sender_address, message_instance.sender_port)
+            mocked_send.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_wait_for_connection(node_instance):
+    node_instance.next_node_reader = 'reader'
+    await node_instance.wait_for_connection()
