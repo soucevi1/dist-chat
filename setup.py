@@ -27,12 +27,21 @@ setup(
     zip_safe=False,
     entry_points={
         'console_scripts': [
-            'soucevi1_dist_chat = soucevi1_dist_chat.cli:cli_main',
+            'soucevi1_dist_chat = soucevi1_dist_chat.cli:main',
         ]
     },
     install_requires=[
         'click',
         'setuptools',
         'prompt_toolkit',
+        'asyncio'
+    ],
+    setup_requires=[
+        'pytest-runner'
+    ],
+    tests_require=[
+        'pytest',
+        'asyncio',
+        'asynctest',
     ]
 )
