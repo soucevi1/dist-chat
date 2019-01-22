@@ -85,4 +85,11 @@ For help, run::
 
 Documentation
 -------------
-How to get the documentation.
+You can take a look at the documentation on this `website <https://soucevi1-dist-chat.readthedocs.io/en/latest/>`_.
+
+Or, you can build it using Sphinx::
+
+   $ cd docs
+   $ make html
+
+You can replace ``html`` in the command with whatever Sphinx currently supports. Beware that some third party Sphinx extensions might be required (listed in ``docs/requirements.txt``).
