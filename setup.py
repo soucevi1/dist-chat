@@ -7,7 +7,7 @@ with open('README.rst') as f:
 
 setup(
     name='soucevi1_dist_chat',
-    version='0.1.5',
+    version='0.1.6',
     packages=find_packages(),
     url='https://github.com/soucevi1/dist-chat',
     author='Vit Soucek',
@@ -27,7 +27,7 @@ setup(
     zip_safe=False,
     entry_points={
         'console_scripts': [
-            'soucevi1_dist_chat = soucevi1_dist_chat.cli:main',
+            'soucevi1_dist_chat = soucevi1_dist_chat.cli:cli_main',
         ]
     },
     install_requires=[
