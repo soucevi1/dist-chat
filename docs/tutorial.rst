@@ -28,6 +28,10 @@ The leader is the only node in the chatroom that actually knows and is connected
 
 When the leader disconnects or dies, a new one must be elected. How it's done it described in the next sections.
 
+.. figure:: _static/leader_node.svg
+
+   Node ``C`` sends message to the leader. The leader broadcasts it to the other nodes.
+
 The Network Topology
 ^^^^^^^^^^^^^^^^^^^^
 The chatroom is defined as one network ring. This means that any node only knows its two neighbors, in the program called *next* and *previous*. Plus, every node knows the leader in order to sent it a message.
@@ -36,10 +40,12 @@ When a node disconnects or dies, the ring must be renewed. Let's say, that node 
 
 When node ``B`` logs out, the following happens:
   * Both ``A`` and ``C`` detect, that their neighbor died and that the ring must be repaired.
+     .. figure:: _static/node_left_detection.svg
   * Node ``C`` knows that when its previous node (``B``) dies, it needs to send a message to node ``B``'s previous node, so that ``B``'s previous node knows who its new next node will be.
   * A message is sent by ``C`` to the ring. Every node in the way reads it and if its next node id dead, it connects to the initial sender of this message.
+     .. figure:: _static/node_left_new_conn.svg
 
-This is how the ring repairs itself.
+This is how the ring repairs itself. However, only one node can leave it at once.
 
 Leader Election
 ^^^^^^^^^^^^^^^
@@ -74,17 +80,21 @@ Basically, what happens, is:
    * Any node starts with logical time 0
    * When a process (a node) makes a *significant* action, its logical time is incremented by 1
    * When a node ``X`` receives a message from another node (``Y``), it synchronizes its logical time and increments it
-       - ``time(X)`` = max( time(X), time(Y) ) + 1
+       - ``time(X) = max( time(X), time(Y) ) + 1``
 
 Logging in
 ^^^^^^^^^^
 When a node wants to log in, it needs to be given an IP address and a port of any node that is already participating in the ring.
 
 The node ``X`` wants to log in and contacts the node ``Y``:
- * ``X`` open the connection and sends a login message to the node ``Y``
+ * ``X`` opens the connection and sends a login message to the node ``Y``
+    .. figure:: _static/login_init.svg
  * ``Y`` receives the message and crafts and sends the answer. The answer contains: IP and port of the ``Y``'s next node and IP and port of the leader.
+    .. figure:: _static/login_info.svg
  * ``X`` receives the answer. It connects to the ``Y``'s next node, which becomes ``X``'s next node. It also connects to the leader.
- * ``Y`` connects to ``X`` as ``X`` it becomes the new next node of ``Y``
+    .. figure:: _static/login_X_conn.svg
+ * ``Y`` connects to ``X`` as ``X`` becomes the new next node of ``Y``
+    .. figure:: _static/login_done.svg
 
 Shortly said, the new node goes in front of the node it contacts during the login process.
 

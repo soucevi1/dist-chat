@@ -5,13 +5,20 @@ import json
 class MessageType(Enum):
     """
     Class wrapping the types of messages used in the program
-    * user_message: chat message sent by another user
-    * election_message: message used during the elections
-    * login_message: message sent by the node that wants to log in
-    * prev_inform_message: previous node is dead, inform its previous node about address and port to connect to
-    * i_am_prev_message: message sent by new prev node to its next node
-    * hello_leader_message: let the leader know about new node
-    * elected_message: leader is already elected
+
+       * user_message: chat message sent by another user
+
+       * election_message: message used during the elections
+
+       * login_message: message sent by the node that wants to log in
+
+       * prev_inform_message: previous node is dead, inform its previous node about address and port to connect to
+
+       * i_am_prev_message: message sent by new prev node to its next node
+
+       * hello_leader_message: let the leader know about new node
+
+       * elected_message: leader is already elected
     """
     user_message = 1
     login_message = 2
@@ -34,11 +41,12 @@ class CMessage:
         First is a constructor creating the instance in a common way
         using given parameters.
         Second is a constructor that creates the message from received JSON.
+
         :param sender_address: IP address of the sender of the message
         :param sender_port: Port of the sender of the message
         :param sender_name: Name of the sender of the message
         :param message_type: Type of the message
-        :param message_data: Data carried by the message, the main body
+        :param message_data: Data carried by the message, the cli_main body
         :param message_json: JSON received by the server
         :param message_str: same as JSON, in string format
         """
@@ -60,6 +68,7 @@ class CMessage:
     def convert_to_json(self):
         """
         Convert message to JSON.
+
         :return: Message in the JSON format
         """
         d = {'s_addr': self.sender_address,
@@ -79,6 +88,7 @@ class CMessage:
     def convert_to_string(self):
         """
         Convert message to string
+
         :return: Message JSON in string format
         """
         d = {'s_addr': self.sender_address,
@@ -98,6 +108,7 @@ class CMessage:
     def from_json(self, received_json):
         """
         Convert JSON to the CMessage class.
+
         :param received_json: JSON by the server
         """
         self.sender_address = received_json['s_addr']
@@ -113,6 +124,7 @@ class CMessage:
     def from_string(self, str):
         """
         Convert string to CMessage.
+
         :param str: JSON in string format
         :return:
         """

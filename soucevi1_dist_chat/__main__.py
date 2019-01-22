@@ -1,4 +1,4 @@
-from .cli import main
+from .cli import cli_main
 
 
-main()
+cli_main()

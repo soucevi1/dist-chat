@@ -34,20 +34,20 @@ The program only has a CLI mode so far. You can run it with several arguments:
 Chatroom creation
 -----------------
 
-The chatroom is created by running the leader node. A chatroom can only have one leader node, so if you already run onw and start another, the other will create a new room.
+The chatroom is created by running the leader node. A chatroom can only have one leader node, so if you already run one and start another, the other will create a new room.
 
 To create a chatroom with the leader called ``Lojza`` on IP:port ``1.2.3.4:12345`` type the following command::
 
-   soucevi1_dist_chat -l -a 1.2.3.4 -p 12345 -n Lojza
+   $ soucevi1_dist_chat -l -a 1.2.3.4 -p 12345 -n Lojza
 
 Other nodes
 ^^^^^^^^^^^
 
 To run another node (user ``Pepa`` on IP:port ``7.8.9.1:45678``) and connect it to the existing chatroom, type::
 
-   soucevi1_dist_chat -n Pepa -a 7.8.9.1 -p 45678 -na 1.2.3.4 -np 12345
+   $ soucevi1_dist_chat -n Pepa -a 7.8.9.1 -p 45678 -na 1.2.3.4 -np 12345
 
-The new node will automatically create the ring with the existing leader node. Should you want another node to join the chatroom, the neighbor address and port arguments you can use either the ``Lojza``'s or ``Pepa``'s contact information.
+The new node will automatically create the ring with the existing leader node. Should you want another node to join the chatroom, as the neighbor address and port arguments you can use either the ``Lojza``'s or ``Pepa``'s contact information.
 
 Chatting
 --------

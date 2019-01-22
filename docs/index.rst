@@ -27,11 +27,11 @@ The program is uploaded on `PyPI <https://pypi.org/project/soucevi1-dist-chat/>`
 
 For the newest version, just type::
 
-   python -m pip install soucevi1_dist_chat
+ $ python -m pip install soucevi1_dist_chat
 
 For any specific version, type::
 
-   python -m pip install soucevi1_dist_chat==<version>
+ $ python -m pip install soucevi1_dist_chat==<version>
 
 You can also clone and use the `GitHub repository <https://github.com/soucevi1/dist-chat>`_.
 
@@ -41,13 +41,13 @@ If you installed the program, you can create the room and chat!
 
 Chatroom creation is very simple. You only need to run the leader node::
 
-   soucevi1_dist_chat -l -n Name -a 1.2.3.4 -p 12345
+   $ soucevi1_dist_chat -l -n Name -a 1.2.3.4 -p 12345
 
 The command above will run the leader node (``-l``) on IP address ``1.2.3.4`` and port ``12345`` with username ``Name``. The leader will listen and as soon as some other node makes a connection to it, the chat will start.
 
 Then, you can start another node that will connect to the running leader::
 
-   soucevi1_dist_chat -n Name2 -a 3.4.5.6 -p 54321 -na 1.2.3.4 -np 12345
+   $ soucevi1_dist_chat -n Name2 -a 3.4.5.6 -p 54321 -na 1.2.3.4 -np 12345
 
 This node is run by a user called ``Name2`` on ``3.4.5.6:54321``. As you can see, non-leader nodes need an address and a port of any node that is already participating in the chat in order to join the chatroom. If you want to read more about usage, read :ref:`ref-tutor`. More about the inner implementation is in :ref:`ref-impl`.
 

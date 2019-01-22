@@ -41,6 +41,7 @@ class CNode:
     async def handle_message(self, message, reader, writer):
         """
         Decide what to do with received message.
+
         :param message: Received message to handle
         :param reader: Reader/writer pair of the message sender
         :param writer: Reader/writer pair of the message sender
@@ -97,6 +98,7 @@ class CNode:
         When received elected_message, it means the new leader is known already.
         This message should run around the circle until it comes to the sender
         (leader) again. All non-leader nodes should connect to the leader.
+
         :param message: CMessage with new leader information
         """
         self.leader_address = message.message_data['addr']
@@ -119,10 +121,11 @@ class CNode:
 
     async def handle_election_message(self, message):
         """
-        Election messages are the main communication during the
+        Election messages are the cli_main communication during the
         Chang-Roberts algorithm. The node with the biggest ID
         (concatenated string "IP+port") will become the next leader.
-        This coroutine is the main body of the Chang-Roberts algorithm.
+        This coroutine is the cli_main body of the Chang-Roberts algorithm.
+
         :param message: Election CMessage from the previous node
         """
         sender_id = str(message.message_data['addr']) + str(message.message_data['port'])
@@ -155,9 +158,9 @@ class CNode:
     async def handle_hello_leader_message(self, message, reader):
         """
         New node registers to the message broadcast.
+
         :param message:
         :param reader:
-        :param writer:
         """
         if self.find_in_connections(reader):
             # Connection already exists
@@ -171,6 +174,7 @@ class CNode:
         """
         The leader node distributes a message telling everyone in
         the ring (except the new node) that a new node joined.
+
         :param message: Original hello message
         """
         m = self.craft_message(MessageType.user_message, f'{message.sender_name} joined the ring!')
@@ -187,6 +191,7 @@ class CNode:
         to the console.
         If it is a leader, it must distribute the message to all the
         nodes in the ring.
+
         :param message: User message to handle
         :param reader: Stream reader
         """
@@ -200,6 +205,7 @@ class CNode:
     def print_user_message(self, message):
         """
         Print received user message.
+
         :param message: CMessage to be printed.
         """
         print(Colors.BOLD + Colors.CYAN + f'> {message.sender_name}' + Colors.RESET +
@@ -209,6 +215,7 @@ class CNode:
     async def add_connection_record(self, message, reader):
         """
         Add new connection to the broadcasting list.
+
         :param message: Received user message
         :param reader: Stream reader
         """
@@ -230,6 +237,7 @@ class CNode:
         """
         Find if there is a record of the connection
         represented by the given stream writer.
+
         :param reader: Stream writer
         :return: True if writer is in connections, False otherwise.
         """
@@ -241,6 +249,7 @@ class CNode:
     async def distribute_message(self, message, exc=None):
         """
         Distribute message to all known nodes.
+
         :param message: User message
         :param exc: Exception in distribution: IP and port of a node that will not receive the message
         """
@@ -271,6 +280,7 @@ class CNode:
         A node died. Its next node detects it and sends
         a message to the ring. If this node's next is dead,
         its new next node is the sender of the message.
+
         :param message: Message to handle
         """
         # Pass the message on if this node's next is alive.
@@ -301,6 +311,7 @@ class CNode:
         The previous node of the current node has changed
         and it's informing this node about being its new prev,
         so it can update the instance streams.
+
         :param reader: Stream reader of the new previous node
         :param writer: Stream writer of the new previous node
         """
@@ -320,6 +331,7 @@ class CNode:
         A new node wants to log in. Make the new node this
         node's next and tell it where to connect (its next
         is this node's old next).
+
         :param message: Login message to handle
         :param writer: Writer stream of the new node
         """
@@ -387,7 +399,7 @@ class CNode:
 
     async def run(self):
         """
-        The main function of the node.
+        The cli_main function of the node.
         Opens connection to the given node, which helps to connect this node into the ring.
         Starts 3 coroutines: one is reading the user input, one is watching the open connection
         and one is listening to incoming connections.
@@ -549,8 +561,8 @@ class CNode:
     def set_logical_clock(self, other_clock):
         """
         Synchronize the logical (Lamport) clock of this node.
-        :param other_clock: Logical clock of the node it is
-        synchronizing with.
+
+        :param other_clock: Logical clock of the node it is synchronizing with.
         """
         self.logical_clock = max(self.logical_clock, other_clock) + 1
 
@@ -575,6 +587,7 @@ class CNode:
         Otherwise if the data is empty, close the connection, set the prev streams to none
         and inform the dead previous' previous node where to connect.
         If the data is OK, create a CMessage instance out of them and handle the message.
+
         :param reader: AsyncIO StreamReader, high level socket for receiving data from the connection.
         :param writer: ASyncIO StreamWriter, high level socket for sending data through the connection.
         """
@@ -627,6 +640,7 @@ class CNode:
         """
         Remove the connection represented by streams in argument
         form the leader connections list.
+
         :param reader: Stream reader of the removed connection
         :param writer: Stream writer of the removed connection
         """
@@ -737,6 +751,7 @@ class CNode:
         Create CMessage instance with information about
         the sender (current node), given type and body.
         First, logical clock needs to be incremented.
+
         :param m_type: Type of the message
         :type m_type: MessageType
         :param data: Main body of the message.
@@ -749,6 +764,7 @@ class CNode:
     async def send_user_message(self, message):
         """
         Send user input as a message to the leader node.
+
         :param message: CMessage made from the user input.
         """
         if not self.is_leader:
@@ -770,6 +786,7 @@ class CNode:
     async def send_message_to_ring(self, message):
         """
         Send given message to the next node in the ring.
+
         :param message: CMessage to be sent
         """
         m = message.convert_to_string()
@@ -783,6 +800,7 @@ class CNode:
     async def send_message_to_leader(self, message):
         """
         Send given message directly to the leader node.
+
         :param message: CMessage to be sent
         """
         m = message.convert_to_string()

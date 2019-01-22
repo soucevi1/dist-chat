@@ -1,3 +1,7 @@
+"""
+The main entry module for the command-line interface.
+"""
+
 import sys
 import click
 from soucevi1_dist_chat import CNode
@@ -6,19 +10,18 @@ import logging
 
 
 @click.command()
-@click.option('-l/-L', '--leader/--not_leader', is_flag=True, default=False,
-              help='This is the first node to started in this chatroom, e.g. the leader')
+@click.option('-l/-L', '--leader/--not_leader', is_flag=True, default=False, help='This is the first node to started in this chatroom, e.g. the leader')
 @click.option('-a', '--address', required=True, help='IP address this node will run on')
 @click.option('-p', '--port', type=int, help='Port this node will bind to')
 @click.option('-na', '--neighbor-address',  help='IP address of the neighbor')
 @click.option('-np', '--neighbor-port',  help='Port of the neighbor')
 @click.option('-n', '--name', help='Name that will be displayed to other participants')
-@click.option('-v', '--verbose', is_flag=True, default=False, help='Logging not only to'
-                                                                   'file, but also to stdout.')
-def main(leader, address, port, neighbor_address, neighbor_port, name, verbose):
+@click.option('-v', '--verbose', is_flag=True, default=False, help='Logging not only to file, but also to stdout.')
+def cli_main(leader, address, port, neighbor_address, neighbor_port, name, verbose):
     """
     Main function of the CLI program.
     Runs one instance of the node with given parameters.
+
     :param leader: Bool flag saying if the started node is the leader of a new chatroom.
     :param address: IP address of this node.
     :param port: Port the node will listen to and send from

@@ -27,7 +27,7 @@ setup(
     zip_safe=False,
     entry_points={
         'console_scripts': [
-            'soucevi1_dist_chat = soucevi1_dist_chat.cli:main',
+            'soucevi1_dist_chat = soucevi1_dist_chat.cli:cli_main',
         ]
     },
     install_requires=[
