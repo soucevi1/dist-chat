@@ -2,7 +2,7 @@ sphinx-click
 asyncio
 asynctest
 Click
-proompt-toolkit
+prompt-toolkit
 pytest
 pytest-asyncio
-Sphinx
+
