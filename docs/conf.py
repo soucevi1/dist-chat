@@ -194,9 +194,7 @@ import sphinx.apidoc
 
 
 def run_apidoc(_):
-    ignore_paths = [
-        ...
-    ]
+    ignore_paths = []
 
     argv = [
         "-f",
