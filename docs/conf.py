@@ -187,7 +187,7 @@ intersphinx_mapping = {'https://docs.python.org/': None}
 
 # Following code was added so that docstrings work on Read The Docs
 # append the next line to conf.py, should change "backend" to your module name
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'soucevi1_dist_chat'))
 
 
 def run_apidoc(_):
