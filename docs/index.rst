@@ -10,7 +10,6 @@ soucevi1_dist_chat
    :maxdepth: 2
    :caption: Contents:
 
-   modules
    tutorial
    usage
    api/soucevi1_dist_chat
