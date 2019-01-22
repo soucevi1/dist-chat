@@ -186,6 +186,7 @@ intersphinx_mapping = {'https://docs.python.org/': None}
 
 
 # Following code was added so that docstrings work on Read The Docs
+# (https://ggeditor.readthedocs.io/en/latest/ApiDoc.html)
 # append the next line to conf.py, should change "backend" to your module name
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'soucevi1_dist_chat'))
 
@@ -194,27 +195,18 @@ import sphinx.apidoc
 
 
 def run_apidoc(_):
-    ignore_paths = []
-
-    argv = [
-        "-f",
-        "-T",
-        "-e",
-        "-M",
-        "-o", ".",
-        ".."
-    ] + ignore_paths
-
-    try:
-        # Sphinx 1.7+
-        from sphinx.ext import apidoc
-        apidoc.main(argv)
-    except ImportError:
-        # Sphinx 1.6 (and earlier)
-        from sphinx import apidoc
-        argv.insert(0, apidoc.__file__)
-        apidoc.main(argv)
+    from sphinx.apidoc import main
+    parentFolder = os.path.join(os.path.dirname(__file__), '..')
+    cur_dir = os.path.abspath(os.path.dirname(__file__))
+    sys.path.append(parentFolder)
+    # change "backend" to your module name
+    module = os.path.join(parentFolder, 'soucevi1_dist_chat')
+    output_path = os.path.join(cur_dir, 'api')
+    main(['-e', '-f', '-o', output_path, module])
 
 
 def setup(app):
+    # overrides for wide tables in RTD theme
+    app.add_stylesheet('theme_overrides.css')
+    # trigger the run_apidoc
     app.connect('builder-inited', run_apidoc)
