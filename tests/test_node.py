@@ -3,7 +3,6 @@ import asyncio
 import pytest_asyncio
 from asynctest import CoroutineMock
 from unittest.mock import patch
-from soucevi1_dist_chat.CMessage import MessageType
 from tests.fixtures import node_instance, message_instance
 
 
@@ -160,4 +159,3 @@ async def test_initiate_election(node_instance):
         a, k = mocked_send.call_args
         assert a[0].message_data['addr'] == node_instance.address
         assert a[0].message_data['port'] == node_instance.port
-

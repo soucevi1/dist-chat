@@ -121,14 +121,14 @@ class CMessage:
         else:
             self.message_type = received_json['m_type'].value
 
-    def from_string(self, str):
+    def from_string(self, message_string):
         """
         Convert string to CMessage.
 
-        :param str: JSON in string format
+        :param message_string: JSON in string format
         :return:
         """
-        j = json.loads(str)
+        j = json.loads(message_string)
         self.from_json(j)
 
     def print(self):

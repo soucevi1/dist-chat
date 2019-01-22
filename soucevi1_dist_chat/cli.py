@@ -10,11 +10,12 @@ import logging
 
 
 @click.command()
-@click.option('-l/-L', '--leader/--not_leader', is_flag=True, default=False, help='This is the first node to started in this chatroom, e.g. the leader')
+@click.option('-l/-L', '--leader/--not_leader', is_flag=True, default=False,
+              help='This is the first node to started in this chatroom, e.g. the leader')
 @click.option('-a', '--address', required=True, help='IP address this node will run on')
 @click.option('-p', '--port', type=int, help='Port this node will bind to')
-@click.option('-na', '--neighbor-address',  help='IP address of the neighbor')
-@click.option('-np', '--neighbor-port',  help='Port of the neighbor')
+@click.option('-na', '--neighbor-address', help='IP address of the neighbor')
+@click.option('-np', '--neighbor-port', help='Port of the neighbor')
 @click.option('-n', '--name', help='Name that will be displayed to other participants')
 @click.option('-v', '--verbose', is_flag=True, default=False, help='Logging not only to file, but also to stdout.')
 def cli_main(leader, address, port, neighbor_address, neighbor_port, name, verbose):
@@ -53,4 +54,7 @@ def cli_main(leader, address, port, neighbor_address, neighbor_port, name, verbo
             print(f'p {neighbor_port}')
             sys.exit(1)
     node = CNode.CNode(leader, address, port, neighbor_address, neighbor_port, name)
+
+    # The method 'run' serves as a high-level interface to run_until_complete, run_forever etc.
+    # It is provisional and might be replaced in the future AsyncIO releases.
     asyncio.run(node.run())

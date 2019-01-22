@@ -317,7 +317,6 @@ class CNode:
         """
         # There is still an active connection to the old previous node
         if self.prev_node_writer is not None and not self.prev_node_writer.is_closing():
-
             self.prev_node_writer.close()
             logging.info(f'{self.logical_clock}: Closing the old prev')
             await self.prev_node_writer.wait_closed()
@@ -340,21 +339,21 @@ class CNode:
         if self.next_node_port is None or self.next_node_address is None:
 
             answer = {
-                      'next_IP': self.address,
-                      'next_port': self.port,
-                      'leader_IP': self.leader_address,
-                      'leader_port': self.leader_port
-                      }
+                'next_IP': self.address,
+                'next_port': self.port,
+                'leader_IP': self.leader_address,
+                'leader_port': self.leader_port
+            }
 
         # If the ring already exists
         else:
 
             answer = {
-                      'next_IP': self.next_node_address,
-                      'next_port': self.next_node_port,
-                      'leader_IP': self.leader_address,
-                      'leader_port': self.leader_port
-                      }
+                'next_IP': self.next_node_address,
+                'next_port': self.next_node_port,
+                'leader_IP': self.leader_address,
+                'leader_port': self.leader_port
+            }
 
         a = self.craft_message(MessageType.login_message, answer)
         s_answer = a.convert_to_string()
@@ -427,7 +426,7 @@ class CNode:
                 logging.critical(f'{self.logical_clock}: Invalid IP or port passed in argument')
                 sys.exit(1)
 
-            logging.info(f'{self.logical_clock}: Initial connection established with ' 
+            logging.info(f'{self.logical_clock}: Initial connection established with '
                          f'{self.next_node_address}:{self.next_node_port}')
             self.set_logical_clock(self.logical_clock)
 
@@ -683,7 +682,7 @@ class CNode:
 
                 data = await self.next_node_reader.read()
 
-            except (asyncio.CancelledError, ConnectionError) as e:
+            except (asyncio.CancelledError, ConnectionError):
 
                 logging.info(f'{self.logical_clock}: Waiting for connection to the next node...')
                 self.next_node_writer = None
@@ -705,7 +704,6 @@ class CNode:
 
                 # If there is a second chance, wait and repeat the reading.
                 if flag:
-
                     await asyncio.sleep(0.3)
                     flag = False
                     continue
@@ -822,6 +820,3 @@ class CNode:
         self.voting = True
         m = self.craft_message(MessageType.election_message, {'addr': self.address, 'port': self.port})
         await self.send_message_to_ring(m)
-
-
-
