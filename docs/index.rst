@@ -12,7 +12,7 @@ soucevi1_dist_chat
 
    tutorial
    usage
-   api/soucevi1_dist_chat
+   modules
 
 
 This program is a semestral project on MI-PYT and MI-DSV courses at FIT CTU in Prague. It is implemented in Python 3.7 and uses `AsyncIO <https://docs.python.org/3/library/asyncio.html>`_. Since a few new AsyncIO features were used in this program, it is necessary to have **Python 3.7 or higher** to run it.

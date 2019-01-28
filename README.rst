@@ -93,3 +93,5 @@ Or, you can build it using Sphinx::
    $ make html
 
 You can replace ``html`` in the command with whatever Sphinx currently supports. Beware that some third party Sphinx extensions might be required (listed in ``docs/requirements.txt``).
+
+Building the documentation yourself is the preferred way if you want to see the API documentation. ReadTheDocs only supports Python 3.5 so far and from their perspective this project is full of syntax errors (newer Python constructs like f-strings etc.). The docs won't build properly with syntax errors in the code.
